@@ -1,9 +1,52 @@
 # Configuration
 
-## Architecture
+## Default presets
+
+`plugin.configs.recommended`, `strict`, and `strictest` work without settings.
+Their `-type-checked` counterparts add typed/project checks and completeness
+policies; configure a typed parser and lint without ESLint result caching.
+
+Defaults are an explicit convention, not inference about arbitrary code:
+
+| Purpose | Default paths under `src/` |
+| --- | --- |
+| Domain layer/component | `domain/**`, `entities/**` |
+| Application layer/component | `application/**`, `use-cases/**`, `usecases/**` |
+| Adapter layer/component | `adapters/**`, `infrastructure/**` |
+| Presentation layer/component | `presentation/**`, `ui/**` |
+| Composition | `main.*`, `bootstrap.*`, `bootstrap/**`, `composition/**` |
+| Public component entries | `index.*`, `public.*` at each component root |
+| Entities | `entities/**`, `domain/entities/**` |
+| Ports | `ports/**` and `ports.*` directly under conventional component roots |
+| Controllers | Adapter/presentation `controllers/**` |
+| Repositories | Adapter `repositories/**`, `persistence/**`, `database/**` |
+| Views / presenters | Presentation `views/**`, presentation/adapter `presenters/**` |
+| Contracts | Application `contracts/requests/responses/models` directories; `contracts/request/response/models.*` files |
+| Immutable scopes | Any `pure/**`, `immutable/**`, `pure.*`, `immutable.*` under `src/` |
+| Business tests / API | `testing/business.*` or `testing/business/**`; `testing/api.*` or `testing/api/**` |
+
+Domain has no outward layer dependencies; application may depend on domain;
+adapters may depend on domain/application; presentation may depend on those three;
+composition may depend on all layers. Same-layer dependencies remain allowed.
+Tests match `*.test.*`, `*.spec.*`, `test/tests/__tests__` directories, and `src/testing/**`.
+
+Built-in infrastructure classifications cover common web frameworks (Express,
+Fastify, Koa, Next, React, Vue, Angular, Nest), persistence packages (pg, mysql2,
+MongoDB, Mongoose, TypeORM, Sequelize, Prisma, Drizzle), transport libraries
+(Node HTTP/HTTPS, Axios, Undici), and Node filesystem/process/network/OS APIs.
+Corresponding adapter subdirectories also classify infrastructure.
+See [exact patterns](https://github.com/George2f/eslint-plugin-clean-architecture/blob/main/src/utils/defaults.ts).
+
+The root is ESLint's `cwd`, not the plugin import directory. A root tsconfig is
+used when present; otherwise graph roots are source files under `src/`. Actors,
+independent use-case labels, and volatile targets are never inferred. Add explicit
+configuration for those checks. Unrecognized layouts are not protected by an
+imaginary mapping; use the helper below.
+
+## Custom architecture
 
 All file globs are root-relative, slash-separated, minimatch patterns. Absolute
-`root` is required. Negated patterns are rejected; use `ignore` for exclusions.
+`root` is required for explicit mappings. Negated patterns are rejected; use `ignore` for exclusions.
 Package restrictions accept exact package names (including subpaths), glob
 patterns, or resolved root-relative paths. Node built-ins can be named explicitly.
 External-package declaration paths are recognized under `node_modules`.
@@ -31,6 +74,25 @@ Ambiguous layer/component membership throws; ordering is not an escape hatch.
 Roles may overlap. An absent role means no modules declared in that role.
 Use `defineArchitecture()` for early validation and exported TypeScript types
 for authoring; `createConfig()` validates as well.
+Explicit settings replace conventions rather than merging in unexpected roles.
+
+```js
+import { createConfig } from '@george2f/eslint-plugin-clean-architecture';
+
+export default [createConfig({
+  root: import.meta.dirname,
+  layers: [
+    { name: 'business', files: ['lib/business/**'], allow: [] },
+    { name: 'delivery', files: ['lib/delivery/**'], allow: ['business'] },
+  ],
+})];
+```
+
+The helper selects rules for scopes actually supplied; it does not require the
+entire architecture model. Options: `level` (`recommended`, `strict`, `strictest`),
+`types`, `project`, and `completeness`. Types/project checks are opt-in; the latter
+requires `architecture.project`. Explicit `unresolved: 'report'` also enables its
+completeness check. Inspect the returned `rules` for the exact enabled set.
 
 ## Typed and project checks
 

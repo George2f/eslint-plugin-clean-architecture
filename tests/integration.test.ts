@@ -48,6 +48,20 @@ describe('catalog and presets', () => {
     createConfig(config, { level: 'strictest', types: true, project: true });
     expect(JSON.stringify(config)).toBe(before);
   });
+  it('provides useful zero-config presets and separates typed prerequisites', () => {
+    for (const [name, count] of [['recommended', 11], ['strict', 13], ['strictest', 13],
+      ['recommended-type-checked', 18], ['strict-type-checked', 28], ['strictest-type-checked', 28]] as const) {
+      const preset = plugin.configs[name] as Linter.Config;
+      expect(Object.keys(preset.rules ?? {})).toHaveLength(count);
+      expect(preset.settings).toBeUndefined();
+      for (const [qualified, value] of Object.entries(preset.rules ?? {})) {
+        const docs = rules[qualified.replace('clean-architecture/', '')]?.meta.docs;
+        if (!name.endsWith('type-checked')) expect(docs?.analysis).toBe('ast');
+        if (name.startsWith('recommended')) expect(docs?.reliability).toBe('configured');
+        if (name.startsWith('strictest')) expect(value).toBe('error');
+      }
+    }
+  });
 });
 
 describe('configuration failures', () => {
@@ -67,10 +81,23 @@ describe('configuration failures', () => {
       ...architecture, layers: [...(architecture.layers ?? []), { name: 'overlap', files: ['src/application/**'], allow: [] }],
     })).toThrow('ambiguously belongs');
   });
-  it('requires settings even when a raw preset is used', () => {
-    expect(() => new Linter().verify('export {};', [{
+  it('works without architecture settings when a preset is used', () => {
+    expect(new Linter({ cwd: root }).verify('export {};', [{
       files: ['**/*.ts'], ...(plugin.configs.recommended as Linter.Config),
-    }], { filename: 'source.ts' })).toThrow('architecture.root');
+    }], { filename: 'source.ts' })).toEqual([]);
+  });
+  it('enforces conventional boundaries using ESLint cwd rather than module import cwd', () => {
+    const config = { files: ['**/*.js'], ...(plugin.configs.recommended as Linter.Config) };
+    const linter = new Linter({ cwd: root });
+    const allowed = linter.verify('import { Order } from "../domain/index.js";', [config], { filename: file('application/source.js') });
+    const forbidden = linter.verify('import { Volatile } from "../adapters/volatile.js";', [config], { filename: file('domain/source.js') });
+    expect(allowed).toEqual([]);
+    expect(forbidden.some(message => message.ruleId === 'clean-architecture/dependency-direction')).toBe(true);
+  });
+  it('requires parser services only for the typed presets', () => {
+    expect(() => new Linter({ cwd: root }).verify('export {};', [{
+      files: ['**/*.ts'], ...(plugin.configs['strict-type-checked'] as Linter.Config),
+    }], { filename: file('application/source.ts') })).toThrow('requires @typescript-eslint/parser');
   });
 });
 
@@ -131,6 +158,18 @@ describe('actual ESLint integration', () => {
     expect(result?.fatalErrorCount).toBe(0);
     expect(result?.messages).toEqual([expect.objectContaining({ ruleId: 'clean-architecture/no-outer-types-in-contracts' })]);
   });
+  it('runs the typed preset without requiring architecture settings', async () => {
+    const eslint = new ESLint({
+      cwd: root, overrideConfigFile: true, cache: false,
+      overrideConfig: [{
+        ...(plugin.configs['strict-type-checked'] as Linter.Config),
+        files: ['**/*.ts'], languageOptions: { parser, parserOptions: { project: './tsconfig.json', tsconfigRootDir: root } },
+      }],
+    });
+    const [result] = await eslint.lintFiles([file('application/override-bad.ts')]);
+    expect(result?.fatalErrorCount).toBe(0);
+    expect(result?.messages).toContainEqual(expect.objectContaining({ ruleId: 'clean-architecture/no-concrete-method-override', severity: 1 }));
+  });
   it('fails explicitly when contract traversal budget is exhausted', async () => {
     const eslint = new ESLint({
       cwd: root, overrideConfigFile: true,
@@ -140,8 +179,7 @@ describe('actual ESLint integration', () => {
         rules: { 'clean-architecture/no-outer-types-in-contracts': ['error', { maxTypeNodes: 10 }] },
       }],
     });
-    const code = `export type Large = ${Array.from({ length: 20 }, (_,i) => `{ a${i}: string }`).join(' | ')};`;
-    await expect(eslint.lintText(code, { filePath: file('application/contracts-good.ts') })).rejects.toThrow('maxTypeNodes');
+    await expect(eslint.lintFiles([file('application/contracts-large.ts')])).rejects.toThrow('maxTypeNodes');
   });
   it('handles a representative project without rebuilding the graph per rule', () => {
     const files: Record<string, string> = { 'b/index.ts': 'export interface Port { read(): number }' };
