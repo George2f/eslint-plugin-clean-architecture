@@ -66,7 +66,7 @@ it has a matching rule.
 | Mine Git history to enforce CCP | Outside ESLint scope: expensive historical analysis and actor attribution would still be needed |
 | Treat every switch as an OCP violation | Rejected: switches can implement valid closed sets; admitted heuristic requires repeated proper subtype inspection |
 | Prove LSP with TypeScript assignability | Rejected: assignability does not establish behavioral preconditions/postconditions; throw-only heuristic is explicitly weaker |
-| Warn on every partly used interface | Narrowed: only nonescaping, statically accessed identifier parameters admitted; forwarded/dynamic consumers skipped |
+| Warn on every partly used interface | Narrowed: only nonescaping, statically accessed identifier parameters of project-owned interfaces with methods admitted; data-only, external, forwarded, and dynamic consumers skipped |
 | Ban construction of all concrete objects | Rejected: Ch. 11 explicitly permits stable concrete background facilities; only configured volatile targets prohibited |
 | Ban all inherited concrete overrides | Narrowed to opt-in heuristic; framework hooks and intended template methods are valid counterexamples |
 | Detect CRP from heavy barrel imports | Not shipped: TS erasure, bundler tree shaking, and side effects affect actual forced dependency; public-boundary and interface checks provide narrower evidence |

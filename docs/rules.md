@@ -206,10 +206,12 @@ Normal rendering, map calls, and arbitrary functions are not blanket-banned.
 ## prefer-segregated-interfaces
 
 Ch. 10/13; heuristic, typed. No scope beyond `root`.
-Valid: a Reader parameter whose only required member is read. Warn: consumer
-statically uses one member of a broader interface without forwarding/escaping
-the parameter. Destructuring, dynamic access, and forwarding skip the heuristic.
-Partial usage can still be intentional. Structural TS semantics differ from Java.
+Valid: a Reader parameter whose only required member is read, or a data-only
+request interface. Warn: consumer statically uses one method of a broader,
+project-owned interface without forwarding/escaping the parameter. Data-only
+interfaces, default-library/external interfaces, destructuring, dynamic access,
+and forwarding skip the heuristic. Partial usage can still be intentional.
+Structural TS semantics differ from Java.
 
 ## no-subtype-rejection
 

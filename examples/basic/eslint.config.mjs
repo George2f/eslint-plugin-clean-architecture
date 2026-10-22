@@ -1,14 +1,18 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import parser from '@typescript-eslint/parser';
 import { createConfig } from '../../dist/index.js';
+
+const root = dirname(fileURLToPath(import.meta.url));
 
 export default [{
   files: ['**/*.ts'],
   languageOptions: {
     parser,
-    parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
+    parserOptions: { project: './tsconfig.json', tsconfigRootDir: root },
   },
   ...createConfig({
-    root: import.meta.dirname,
+    root,
     layers: [
       { name: 'domain', files: ['src/domain/**'], allow: [] },
       { name: 'application', files: ['src/application/**'], allow: ['domain'] },

@@ -1,5 +1,6 @@
 # eslint-plugin-clean-architecture
 
+[![npm version](https://img.shields.io/npm/v/@george2f/eslint-plugin-clean-architecture?logo=npm)](https://www.npmjs.com/package/@george2f/eslint-plugin-clean-architecture)
 [![CI](https://github.com/George2f/eslint-plugin-clean-architecture/actions/workflows/ci.yml/badge.svg)](https://github.com/George2f/eslint-plugin-clean-architecture/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -10,7 +11,7 @@ points back to the architectural idea it checks.
 
 - 31 rules: dependency boundaries, components, SOLID signals, contracts, and immutability.
 - All 34 chapters mapped, including documented limits and non-detectable guidance.
-- ESLint 9 flat config, JavaScript and TypeScript, dual ESM/CJS build.
+- ESLint 8.57, 9 and 10 flat config; JavaScript and TypeScript; dual ESM/CJS build.
 
 ## Why this exists
 
@@ -24,7 +25,14 @@ feedback. Start with a preset; customize the boundaries when your layout differs
 npm install --save-dev eslint @george2f/eslint-plugin-clean-architecture
 ```
 
-Requires Node >=20.19 and ESLint 9. TypeScript and minimatch are runtime dependencies.
+Requires Node `^18.18.0 || ^20.9.0 || >=21.1.0` and ESLint `8.57`, `9` or `10`.
+TypeScript and minimatch are runtime dependencies.
+
+| ESLint | Node | Notes |
+| --- | --- | --- |
+| 8.57 | 18.18+ | Flat config; TypeScript users need `@types/eslint` |
+| 9 | 18.18+ | |
+| 10 | 20.19+, 22.13+, or 24+ | |
 
 ## Usage
 
@@ -43,6 +51,15 @@ No architecture settings required for the presets. They use documented conventio
 under `src/`: `domain`/`entities`, `application`/`use-cases`/`usecases`,
 `adapters`/`infrastructure`, and `presentation`/`ui`. Public component entry points
 are `index.*` or `public.*`. Other layouts need [custom mappings](docs/configuration.md#custom-architecture).
+
+CommonJS returns the plugin directly, with named helpers also available:
+
+```js
+const cleanArchitecture = require('@george2f/eslint-plugin-clean-architecture');
+const { createConfig } = require('@george2f/eslint-plugin-clean-architecture');
+
+module.exports = [cleanArchitecture.configs.recommended];
+```
 
 Or pick rules individually:
 
@@ -82,6 +99,9 @@ export default [{
 Typed presets require a tsconfig covering the files and full-scope lint **without
 `--cache`**. They use the root tsconfig for resolution when present, otherwise
 discover source files under `src/`.
+
+On ESLint 8, TypeScript projects additionally need `@types/eslint`, because ESLint
+8 does not ship its own type declarations.
 
 ## Presets and applicability
 
@@ -188,6 +208,19 @@ can change runtime behavior; diagnostics explain the violated boundary instead.
 - Heuristics intentionally admit false positives; use targeted overrides.
 - No rule performs architectural autofixes. Move/invert dependencies deliberately.
 
+## Releasing
+
+Published from CI with npm trusted publishing (OIDC); no tokens are stored.
+
+1. Bump `version` in `package.json` and add a changelog entry.
+2. Commit, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. `.github/workflows/release.yml` lints, tests, validates the package, creates a
+   GitHub Release from the matching changelog section, and publishes with provenance.
+
+One-time setup: on npmjs.com, configure the package's trusted publisher as GitHub
+Actions, repository `George2f/eslint-plugin-clean-architecture`, workflow
+`release.yml`.
+
 ## Development
 
 ```sh
@@ -199,8 +232,9 @@ npm run example
 ```
 
 `lint` typechecks, builds, and lints the package with TypeScript's strict ESLint
-rules and its own dependency rules. Tests include colocated suites for every
-rule, multi-file fixtures, actual ESLint integration, and graph invalidation.
+rules and the plugin's strictest applicable typed checks. CI covers Node
+18/20/22/24 and ESLint 8.57/9/10. Tests include colocated suites for every rule,
+multi-file fixtures, actual ESLint integration, and graph invalidation.
 
 No ebook content is bundled. Rules and book references are independent
 interpretations, not an official or exhaustive mechanical certification.

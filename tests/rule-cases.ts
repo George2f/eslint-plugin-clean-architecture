@@ -106,7 +106,7 @@ const cases: Record<string, { valid: Valid[]; invalid: Invalid[] }> = {
   'no-outer-types-in-contracts': { valid: [typed('contracts-good'), typed('contracts-private')], invalid: [typedInvalid('contracts-inferred'), typedInvalid('contracts-constructor')] },
   'no-entity-boundary-data': { valid: [typed('contracts-good')], invalid: [typedInvalid('contracts-entity')] },
   'boundary-model-dependencies': { valid: [typed('contracts-good')], invalid: [typedInvalid('contracts-inferred')] },
-  'prefer-segregated-interfaces': { valid: [typed('isp-good'), typed('isp-escape')], invalid: [typedInvalid('isp-bad')] },
+  'prefer-segregated-interfaces': { valid: [typed('isp-good'), typed('isp-escape'), typed('contracts-good')], invalid: [typedInvalid('isp-bad')] },
   'no-subtype-rejection': { valid: [typed('rejection-good')], invalid: [typedInvalid('rejection-bad')] },
   'prefer-polymorphic-dispatch': { valid: [typed('dispatch-good')], invalid: [typedInvalid('dispatch-bad')] },
   'no-behavior-in-boundary-models': { valid: [typed('contracts-good')], invalid: [typedInvalid('contracts-behavior')] },

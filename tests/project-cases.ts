@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Linter } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
 import plugin from '../src/index.js';
 import type { Architecture } from '../src/types.js';
+import { createLinter } from './eslint-compat.js';
 
 const temporary: string[] = [];
 afterEach(() => { for (const directory of temporary.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -25,7 +25,7 @@ export function project(files: Record<string, string>): Architecture {
 
 export function lintProject(config: Architecture, name: string, rule: string, text?: string, options: object = {}) {
   const filename = path.join(config.root, name);
-  return new Linter({ cwd: config.root }).verify(text ?? fs.readFileSync(filename, 'utf8'), [{
+  return createLinter({ cwd: config.root }).verify(text ?? fs.readFileSync(filename, 'utf8'), [{
     files: ['**/*.ts'], languageOptions: { parser }, plugins: { 'clean-architecture': plugin },
     settings: { 'clean-architecture': config }, rules: { [`clean-architecture/${rule}`]: ['error', options] },
   }], { filename });

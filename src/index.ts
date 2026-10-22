@@ -1,6 +1,6 @@
-import type { ESLint, Linter, Rule as ESLintRule } from 'eslint';
+import type { ESLint, Rule as ESLintRule } from 'eslint';
 import packageJson from '../package.json';
-import type { Architecture, Docs, Rule } from './types.js';
+import type { Architecture, Docs, FlatConfig, Rule } from './types.js';
 import { defineArchitecture } from './utils/config.js';
 import { defaultArchitecture } from './utils/defaults.js';
 import dependencyDirection from './rules/dependency-direction.js';
@@ -75,7 +75,7 @@ export const rules = registry as unknown as Record<string, PublicRule>;
 const plugin = {
   meta: { name: packageJson.name, version: packageJson.version },
   rules: rules as unknown as ESLint.Plugin['rules'],
-  configs: {} as NonNullable<ESLint.Plugin['configs']>,
+  configs: {} as Record<string, FlatConfig>,
 } satisfies ESLint.Plugin;
 
 export interface ConfigOptions {
@@ -89,7 +89,7 @@ function severity(rule: Rule, level: ConfigOptions['level']): 'error' | 'warn' {
   return rule.meta.docs.reliability === 'configured' || level === 'strictest' ? 'error' : 'warn';
 }
 
-export function createConfig(architecture: Architecture, options: ConfigOptions = {}): Linter.Config {
+export function createConfig(architecture: Architecture, options: ConfigOptions = {}): FlatConfig {
   defineArchitecture(architecture);
   if (Object.keys(options).some(key => !['level', 'types', 'project', 'completeness'].includes(key)) ||
     (options.level !== undefined && !['recommended', 'strict', 'strictest'].includes(options.level)) ||
@@ -134,5 +134,5 @@ for (const level of ['recommended', 'strict', 'strictest'] as const) {
 }
 
 export { defineArchitecture };
-export type { Architecture, Layer, Component, Role, RuleOptions, Docs } from './types.js';
+export type { Architecture, Layer, Component, Role, RuleOptions, Docs, FlatConfig } from './types.js';
 export default plugin;

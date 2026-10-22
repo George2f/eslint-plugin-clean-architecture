@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ESLint, Linter } from 'eslint';
+import type { Linter } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
 import plugin, { createConfig, defineArchitecture, rules } from '../src/index.js';
 import type { Architecture, Context } from '../src/types.js';
@@ -8,9 +8,10 @@ import { architecture, file, root } from './architecture.js';
 import { matches, targetMatches } from '../src/utils/config.js';
 import { project, lintProject } from './project-cases.js';
 import { projectGraph } from '../src/utils/project.js';
+import { createESLint, createLinter } from './eslint-compat.js';
 
 function verify(name: string, code: string, config: Architecture = architecture) {
-  return new Linter({ cwd: config.root }).verify(code, [{
+  return createLinter({ cwd: config.root }).verify(code, [{
     files: ['**/*.ts'], languageOptions: { parser }, plugins: { 'clean-architecture': plugin },
     settings: { 'clean-architecture': config }, rules: { [`clean-architecture/${name}`]: 'error' },
   }], { filename: file('application/source.ts') });
@@ -82,20 +83,20 @@ describe('configuration failures', () => {
     })).toThrow('ambiguously belongs');
   });
   it('works without architecture settings when a preset is used', () => {
-    expect(new Linter({ cwd: root }).verify('export {};', [{
+    expect(createLinter({ cwd: root }).verify('export {};', [{
       files: ['**/*.ts'], ...(plugin.configs.recommended as Linter.Config),
-    }], { filename: 'source.ts' })).toEqual([]);
+    }], { filename: file('application/source.ts') })).toEqual([]);
   });
   it('enforces conventional boundaries using ESLint cwd rather than module import cwd', () => {
     const config = { files: ['**/*.js'], ...(plugin.configs.recommended as Linter.Config) };
-    const linter = new Linter({ cwd: root });
+    const linter = createLinter({ cwd: root });
     const allowed = linter.verify('import { Order } from "../domain/index.js";', [config], { filename: file('application/source.js') });
     const forbidden = linter.verify('import { Volatile } from "../adapters/volatile.js";', [config], { filename: file('domain/source.js') });
     expect(allowed).toEqual([]);
     expect(forbidden.some(message => message.ruleId === 'clean-architecture/dependency-direction')).toBe(true);
   });
   it('requires parser services only for the typed presets', () => {
-    expect(() => new Linter({ cwd: root }).verify('export {};', [{
+    expect(() => createLinter({ cwd: root }).verify('export {};', [{
       files: ['**/*.ts'], ...(plugin.configs['strict-type-checked'] as Linter.Config),
     }], { filename: file('application/source.ts') })).toThrow('requires @typescript-eslint/parser');
   });
@@ -108,7 +109,7 @@ describe('resolution and dependency forms', () => {
     expect(targetMatches(architecture, ['@vendor/db'], '@vendor/db-extra')).toBe(false);
   });
   it('respects type-only exclusion and shadowed require', () => {
-    const linter = new Linter({ cwd: root });
+    const linter = createLinter({ cwd: root });
     const config: Linter.Config = {
       files: ['**/*.ts'], languageOptions: { parser }, plugins: { 'clean-architecture': plugin },
       settings: { 'clean-architecture': architecture },
@@ -138,7 +139,7 @@ describe('resolution and dependency forms', () => {
 
 describe('actual ESLint integration', () => {
   it('runs AST checks on JavaScript with the default Espree parser', () => {
-    const linter = new Linter({ cwd: root });
+    const linter = createLinter({ cwd: root });
     const config = { files: ['**/*.js'], ...createConfig(architecture) };
     const allowed = linter.verify('import { Order } from "../domain/index.js";', [config], { filename: file('application/source.js') });
     const forbidden = linter.verify('import { Volatile } from "../adapters/volatile.js";', [config], { filename: file('application/source.js') });
@@ -146,7 +147,7 @@ describe('actual ESLint integration', () => {
     expect(forbidden.some(message => message.ruleId === 'clean-architecture/dependency-direction')).toBe(true);
   });
   it('runs typed rules through ESLint on inferred exported contracts', async () => {
-    const eslint = new ESLint({
+    const eslint = await createESLint({
       cwd: root, overrideConfigFile: true, cache: false,
       overrideConfig: [{
         files: ['**/*.ts'], languageOptions: { parser, parserOptions: { project: './tsconfig.json', tsconfigRootDir: root } },
@@ -159,7 +160,7 @@ describe('actual ESLint integration', () => {
     expect(result?.messages).toEqual([expect.objectContaining({ ruleId: 'clean-architecture/no-outer-types-in-contracts' })]);
   });
   it('runs the typed preset without requiring architecture settings', async () => {
-    const eslint = new ESLint({
+    const eslint = await createESLint({
       cwd: root, overrideConfigFile: true, cache: false,
       overrideConfig: [{
         ...(plugin.configs['strict-type-checked'] as Linter.Config),
@@ -171,7 +172,7 @@ describe('actual ESLint integration', () => {
     expect(result?.messages).toContainEqual(expect.objectContaining({ ruleId: 'clean-architecture/no-concrete-method-override', severity: 1 }));
   });
   it('fails explicitly when contract traversal budget is exhausted', async () => {
-    const eslint = new ESLint({
+    const eslint = await createESLint({
       cwd: root, overrideConfigFile: true,
       overrideConfig: [{
         files: ['**/*.ts'], languageOptions: { parser, parserOptions: { project: './tsconfig.json', tsconfigRootDir: root } },
@@ -190,7 +191,7 @@ describe('actual ESLint integration', () => {
       return { Program() { graphA = projectGraph(context as Context); graphB = projectGraph(context as Context); } };
     } };
     const started = performance.now();
-    const result = new Linter({ cwd: config.root }).verify(files['a/file-0.ts'] ?? '', [{
+    const result = createLinter({ cwd: config.root }).verify(files['a/file-0.ts'] ?? '', [{
       files: ['**/*.ts'], languageOptions: { parser }, plugins: { probe: { rules: { graph: probe } } },
       settings: { 'clean-architecture': config }, rules: { 'probe/graph': 'error' },
     }], { filename: `${config.root}/a/file-0.ts` });
