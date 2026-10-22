@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import fileSystem from 'node:fs';
 import path from 'node:path';
 import type { Architecture } from '../types.js';
 
@@ -7,7 +7,7 @@ const extensions = 'js,jsx,ts,tsx,mjs,cjs,mts,cts';
 export function hasBackendLayout(root: string): boolean {
   const directories = ['domain', 'entities', 'application', 'use-cases', 'usecases',
     'adapters', 'infrastructure', 'presentation', 'ui', 'controllers', 'repositories'];
-  return directories.some(directory => fs.existsSync(path.join(root, 'src', directory)));
+  return directories.some(directory => fileSystem.existsSync(path.join(root, 'src', directory)));
 }
 
 export function hasFrontendLayout(root: string): boolean {
@@ -16,9 +16,9 @@ export function hasFrontendLayout(root: string): boolean {
     'hooks', 'use-cases', 'application', 'services', 'api', 'clients',
     'domain', 'entities', 'models',
   ];
-  return directories.some(directory => fs.existsSync(path.join(root, 'src', directory))) ||
-    ['main', 'index', 'bootstrap'].some(name => fs.existsSync(path.join(root, 'src', `${name}.tsx`))) ||
-    ['main', 'index', 'bootstrap'].some(name => fs.existsSync(path.join(root, 'src', `${name}.jsx`)));
+  return directories.some(directory => fileSystem.existsSync(path.join(root, 'src', directory))) ||
+    ['main', 'index', 'bootstrap'].some(name => fileSystem.existsSync(path.join(root, 'src', `${name}.tsx`))) ||
+    ['main', 'index', 'bootstrap'].some(name => fileSystem.existsSync(path.join(root, 'src', `${name}.jsx`)));
 }
 
 export function frontendArchitecture(root: string, options: { strict?: boolean } = {}): Architecture {
@@ -66,7 +66,7 @@ export function frontendArchitecture(root: string, options: { strict?: boolean }
     testingApi: [],
     includeTypeOnly: false,
     ignore: ['dist/**', 'build/**', 'coverage/**', '.next/**'],
-    project: fs.existsSync(path.join(root, 'tsconfig.json')) ? { tsconfig: 'tsconfig.json' } : { files: ['src/**/*'] },
+    project: fileSystem.existsSync(path.join(root, 'tsconfig.json')) ? { tsconfig: 'tsconfig.json' } : { files: ['src/**/*'] },
   };
 }
 
@@ -115,6 +115,6 @@ export function defaultArchitecture(root: string): Architecture {
     tests,
     businessTests: [`src/testing/business.${extension}`, 'src/testing/business/**'],
     testingApi: [`src/testing/api.${extension}`, 'src/testing/api/**'],
-    project: fs.existsSync(path.join(root, 'tsconfig.json')) ? { tsconfig: 'tsconfig.json' } : { files: ['src/**/*'] },
+    project: fileSystem.existsSync(path.join(root, 'tsconfig.json')) ? { tsconfig: 'tsconfig.json' } : { files: ['src/**/*'] },
   };
 }

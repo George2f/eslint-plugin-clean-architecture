@@ -1,5 +1,5 @@
 import { createRule, report } from '../utils/create-rule.js';
-import { architecture, componentOf } from '../utils/config.js';
+import { architectureOf, componentOf } from '../utils/config.js';
 import { dependencyVisitors } from '../utils/dependencies.js';
 import { cyclePath, projectGraph } from '../utils/project.js';
 
@@ -8,7 +8,7 @@ export default createRule({
   chapters: [14], principle: 'Acyclic Dependencies', analysis: 'project', scopes: ['components', 'project'],
   limitations: 'Requires full-scope lint without ESLint result caching. Runtime-computed dependencies cannot be included. Intra-component file cycles are not component cycles.',
   create(context) {
-    const config = architecture(context);
+    const config = architectureOf(context);
     let graph: ReturnType<typeof projectGraph> | undefined;
     const getGraph = (): ReturnType<typeof projectGraph> => graph ??= projectGraph(context);
     return dependencyVisitors(context, dependency => {

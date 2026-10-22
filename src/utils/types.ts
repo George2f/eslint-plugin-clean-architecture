@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import typescript from 'typescript';
 import type { TSESTree } from '@typescript-eslint/utils';
 import type { Context } from '../types.js';
 
@@ -20,11 +20,11 @@ export function typeServices(context: Context) {
   };
 }
 
-export function dealias(checker: ts.TypeChecker, symbol: ts.Symbol | undefined): ts.Symbol | undefined {
-  return symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+export function dealias(checker: typescript.TypeChecker, symbol: typescript.Symbol | undefined): typescript.Symbol | undefined {
+  return symbol && symbol.flags & typescript.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 
-export function declarationsOf(context: Context, node: TSESTree.Node): readonly ts.Declaration[] {
+export function declarationsOf(context: Context, node: TSESTree.Node): readonly typescript.Declaration[] {
   const { checker, toTS } = typeServices(context);
   const target = toTS.get(node);
   const type = checker.getTypeAtLocation(target);
@@ -33,22 +33,25 @@ export function declarationsOf(context: Context, node: TSESTree.Node): readonly 
   return [...new Set(symbols.flatMap(symbol => symbol?.getDeclarations() ?? []))];
 }
 
-export function containingClass(node: ts.Node | undefined): ts.ClassLikeDeclaration | undefined {
-  while (node) {
-    if (ts.isClassLike(node)) return node;
-    node = node.parent;
+export function containingClass(start: typescript.Node | undefined): typescript.ClassLikeDeclaration | undefined {
+  let current = start;
+  while (current) {
+    if (typescript.isClassLike(current)) return current;
+    current = current.parent;
   }
   return undefined;
 }
 
-export function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  return ts.canHaveModifiers(node) && Boolean(ts.getModifiers(node)?.some(modifier => modifier.kind === kind));
+export function hasModifier(node: typescript.Node, kind: typescript.SyntaxKind): boolean {
+  if (!typescript.canHaveModifiers(node)) return false;
+  const modifiers = typescript.getModifiers(node);
+  return Boolean(modifiers?.some(modifier => modifier.kind === kind));
 }
 
-export function walkContractType(context: Context, start: ts.Type,
-  match: (type: ts.Type, declarations: readonly ts.Declaration[]) => string | undefined): string | undefined {
+export function walkContractType(context: Context, start: typescript.Type,
+  match: (type: typescript.Type, declarations: readonly typescript.Declaration[]) => string | undefined): string | undefined {
   const { checker, program } = typeServices(context);
-  const seen = new Set<ts.Type>();
+  const seen = new Set<typescript.Type>();
   const queue = [start];
   const limit = context.options[0]?.maxTypeNodes ?? 2000;
   for (const type of queue) {
@@ -58,25 +61,25 @@ export function walkContractType(context: Context, start: ts.Type,
     const declarations = [...(type.aliasSymbol?.declarations ?? []), ...(type.getSymbol()?.declarations ?? [])];
     const result = match(type, declarations);
     if (result) return result;
-    if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.StringLike |
-      ts.TypeFlags.NumberLike | ts.TypeFlags.BigIntLike | ts.TypeFlags.BooleanLike |
-      ts.TypeFlags.ESSymbolLike | ts.TypeFlags.Void | ts.TypeFlags.Undefined | ts.TypeFlags.Null | ts.TypeFlags.Never)) continue;
+    if (type.flags & (typescript.TypeFlags.Any | typescript.TypeFlags.Unknown | typescript.TypeFlags.StringLike |
+      typescript.TypeFlags.NumberLike | typescript.TypeFlags.BigIntLike | typescript.TypeFlags.BooleanLike |
+      typescript.TypeFlags.ESSymbolLike | typescript.TypeFlags.Void | typescript.TypeFlags.Undefined | typescript.TypeFlags.Null | typescript.TypeFlags.Never)) continue;
     if (type.isUnionOrIntersection()) queue.push(...type.types);
     queue.push(...(type.aliasTypeArguments ?? []));
-    if (type.flags & ts.TypeFlags.Object && (type as ts.ObjectType).objectFlags & ts.ObjectFlags.Reference) {
-      queue.push(...checker.getTypeArguments(type as ts.TypeReference));
+    if (type.flags & typescript.TypeFlags.Object && (type as typescript.ObjectType).objectFlags & typescript.ObjectFlags.Reference) {
+      queue.push(...checker.getTypeArguments(type as typescript.TypeReference));
     }
-    if (type.flags & ts.TypeFlags.TypeParameter) {
+    if (type.flags & typescript.TypeFlags.TypeParameter) {
       const constraint = checker.getBaseConstraintOfType(type);
       if (constraint) queue.push(constraint);
     }
     if (declarations.length && declarations.every(declaration =>
       program.isSourceFileDefaultLibrary(declaration.getSourceFile()) ||
       declaration.getSourceFile().fileName.replaceAll('\\', '/').includes('/node_modules/'))) continue;
-    for (const kind of [ts.SignatureKind.Call, ts.SignatureKind.Construct]) {
+    for (const kind of [typescript.SignatureKind.Call, typescript.SignatureKind.Construct]) {
       for (const signature of checker.getSignaturesOfType(type, kind)) {
-        if (signature.declaration && (hasModifier(signature.declaration, ts.SyntaxKind.PrivateKeyword) ||
-          hasModifier(signature.declaration, ts.SyntaxKind.ProtectedKeyword))) continue;
+        if (signature.declaration && (hasModifier(signature.declaration, typescript.SyntaxKind.PrivateKeyword) ||
+          hasModifier(signature.declaration, typescript.SyntaxKind.ProtectedKeyword))) continue;
         queue.push(checker.getReturnTypeOfSignature(signature));
         for (const parameter of signature.getParameters()) {
           const location = parameter.valueDeclaration ?? parameter.declarations?.[0];
@@ -86,12 +89,12 @@ export function walkContractType(context: Context, start: ts.Type,
     }
     for (const property of checker.getPropertiesOfType(type)) {
       const location = property.valueDeclaration ?? property.declarations?.[0];
-      if (location && !hasModifier(location, ts.SyntaxKind.PrivateKeyword) && !hasModifier(location, ts.SyntaxKind.ProtectedKeyword) &&
-        !(ts.isPropertyDeclaration(location) && ts.isPrivateIdentifier(location.name))) {
+      if (location && !hasModifier(location, typescript.SyntaxKind.PrivateKeyword) && !hasModifier(location, typescript.SyntaxKind.ProtectedKeyword) &&
+        !(typescript.isPropertyDeclaration(location) && typescript.isPrivateIdentifier(location.name))) {
         queue.push(checker.getTypeOfSymbolAtLocation(property, location));
       }
     }
-    for (const info of checker.getIndexInfosOfType(type)) queue.push(info.type);
+    for (const indexInfo of checker.getIndexInfosOfType(type)) queue.push(indexInfo.type);
   }
   return undefined;
 }

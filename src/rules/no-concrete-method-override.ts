@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import typescript from 'typescript';
 import { createRule, report } from '../utils/create-rule.js';
 import { containingClass, hasModifier, typeServices } from '../utils/types.js';
 
@@ -12,16 +12,16 @@ export default createRule({
       if (node.kind !== 'method' || node.static || node.computed) return;
       const method = toTS.get(node), owner = containingClass(method.parent);
       if (!owner) return;
-      const ownerType = checker.getTypeAtLocation(owner) as ts.InterfaceType;
+      const ownerType = checker.getTypeAtLocation(owner) as typescript.InterfaceType;
       const name = node.key.type === 'Identifier' ? node.key.name : String('value' in node.key ? node.key.value : '');
-      const queue = [...(ownerType.getBaseTypes() ?? [])], seen = new Set<ts.Type>();
+      const queue = [...(ownerType.getBaseTypes() ?? [])], seen = new Set<typescript.Type>();
       for (const base of queue) {
         if (seen.has(base)) continue;
         seen.add(base);
         const member = checker.getPropertyOfType(base, name);
         if (member) {
-          if (member.declarations?.some(declaration => ts.isMethodDeclaration(declaration) &&
-            Boolean(declaration.body) && !hasModifier(declaration, ts.SyntaxKind.AbstractKeyword))) {
+          if (member.declarations?.some(declaration => typescript.isMethodDeclaration(declaration) &&
+            Boolean(declaration.body) && !hasModifier(declaration, typescript.SyntaxKind.AbstractKeyword))) {
             report(context, node, `Method ${name} overrides an inherited concrete implementation`, [11]);
           }
           return;

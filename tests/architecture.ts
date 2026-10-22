@@ -1,11 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Architecture } from '../src/types.js';
+import type { Architecture as ArchitectureShape } from '../src/types.js';
 
 export const root = fileURLToPath(new URL('./fixtures/app', import.meta.url));
 export const file = (name: string): string => path.join(root, 'src', name);
 
-export const architecture: Architecture = {
+export const architecture: ArchitectureShape = {
   root,
   layers: [
     { name: 'domain', files: ['src/domain/**'], allow: [] },

@@ -2,6 +2,12 @@ import type { TSESTree } from '@typescript-eslint/utils';
 import { createRule, report } from '../utils/create-rule.js';
 import { hasTypeServices, containingClass, typeServices } from '../utils/types.js';
 
+function isThrowOnlyMethod(node: TSESTree.MethodDefinition): boolean {
+  const body = node.value.body;
+  if (!body || body.body.length !== 1) return false;
+  return body.body[0]?.type === 'ThrowStatement';
+}
+
 export default createRule({
   name: 'no-subtype-rejection', description: 'Review inherited operations implemented only by throwing',
   chapters: [9], principle: 'Liskov Substitution', analysis: 'ast', reliability: 'heuristic',
@@ -10,9 +16,9 @@ export default createRule({
     if (hasTypeServices(context)) {
       const { checker, toTS } = typeServices(context);
       return { MethodDefinition(node) {
-        if (node.kind !== 'method' || node.static || node.computed || node.key.type !== 'Identifier' ||
-          node.value.body?.body.length !== 1 || node.value.body.body[0]?.type !== 'ThrowStatement') return;
-        const owner = containingClass(toTS.get(node).parent);
+        if (node.kind !== 'method' || node.static || node.computed || node.key.type !== 'Identifier' || !isThrowOnlyMethod(node)) return;
+        const tsNode = toTS.get(node);
+        const owner = containingClass(tsNode.parent);
         if (!owner) return;
         for (const clause of owner.heritageClauses ?? []) {
           for (const heritage of clause.types) {
@@ -45,8 +51,7 @@ export default createRule({
           if (!base && !implemented.size) continue;
           for (const member of derived.body.body) {
             if (member.type !== 'MethodDefinition' || member.kind !== 'method' || member.static || member.computed ||
-              member.key.type !== 'Identifier' || member.value.body?.body.length !== 1 ||
-              member.value.body.body[0]?.type !== 'ThrowStatement') continue;
+              member.key.type !== 'Identifier' || !isThrowOnlyMethod(member)) continue;
             const methodName = member.key.name;
             const inherited = implemented.has(methodName) || Boolean(base?.body.body.some(candidate => candidate.type === 'MethodDefinition' &&
               candidate.kind === 'method' && !candidate.static && !candidate.computed &&

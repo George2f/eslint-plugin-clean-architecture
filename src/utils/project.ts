@@ -1,15 +1,15 @@
-import fs from 'node:fs';
+import fileSystem from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import ts from 'typescript';
+import typescript from 'typescript';
 import type { Architecture, Context } from '../types.js';
-import { architecture, componentOf, matches, relative, slash } from './config.js';
+import { architectureOf, componentOf, matches, relative, slash } from './config.js';
 import { compilerSettings, moduleMode, type LoadKind } from './dependencies.js';
 
 export interface Edge { source: string; target: string; specifier: string; start: number; typeOnly: boolean }
 export interface Metric { instability: number; abstractness: number; distance: number; incoming: number; outgoing: number; modules: number }
 export interface Graph {
-  files: Map<string, ts.SourceFile>;
+  files: Map<string, typescript.SourceFile>;
   edges: Edge[];
   adjacency: Map<string, Set<string>>;
   metrics: Map<string, Metric>;
@@ -26,7 +26,7 @@ interface Cached {
 const caches = new WeakMap<Architecture, Map<string, Cached>>();
 const settingsIds = new WeakMap<object, number>();
 let nextSettingsId = 0;
-const read = (file: string): string | undefined => { try { return fs.readFileSync(file, 'utf8'); } catch { return undefined; } };
+const read = (file: string): string | undefined => { try { return fileSystem.readFileSync(file, 'utf8'); } catch { return undefined; } };
 
 function digestOf(contents: Map<string, string>): string {
   const hash = createHash('sha256');
@@ -36,7 +36,7 @@ function digestOf(contents: Map<string, string>): string {
 
 function rootsFor(config: Architecture, settings: { files?: string[] }, project: NonNullable<Architecture['project']>, excludes: string[]): string[] {
   const roots = project.files
-    ? ts.sys.readDirectory(config.root, ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'], excludes, project.files)
+    ? typescript.sys.readDirectory(config.root, ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'], excludes, project.files)
     : settings.files ?? [];
   return roots.map(file => path.resolve(file)).filter(file => !matches(relative(config, file), excludes)).sort();
 }
@@ -50,43 +50,43 @@ function settingsId(settings: object): number {
   return id;
 }
 
-function bindingContains(name: ts.BindingName, expected: string): boolean {
-  if (ts.isIdentifier(name)) return name.text === expected;
-  return name.elements.some(element => ts.isBindingElement(element) && bindingContains(element.name, expected));
+function bindingContains(name: typescript.BindingName, expected: string): boolean {
+  if (typescript.isIdentifier(name)) return name.text === expected;
+  return name.elements.some(element => typescript.isBindingElement(element) && bindingContains(element.name, expected));
 }
 
-function requireShadowing(file: ts.SourceFile): (node: ts.Node) => boolean {
+function requireShadowing(file: typescript.SourceFile): (node: typescript.Node) => boolean {
   interface Scope { parent?: Scope; function: boolean; bound: boolean }
-  const scopes = new Map<ts.Node, Scope>();
-  const visit = (node: ts.Node, outer: Scope): void => {
+  const scopes = new Map<typescript.Node, Scope>();
+  const visit = (node: typescript.Node, outer: Scope): void => {
     let scope = outer;
-    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name?.text === 'require') outer.bound = true;
-    if (ts.isFunctionLike(node) || ts.isBlock(node) || ts.isCaseBlock(node) || ts.isCatchClause(node) ||
-      ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node) ||
-      ts.isClassLike(node) || ts.isModuleBlock(node)) {
-      scope = { parent: outer, function: ts.isFunctionLike(node) || ts.isModuleBlock(node), bound: false };
+    if ((typescript.isFunctionDeclaration(node) || typescript.isClassDeclaration(node)) && node.name?.text === 'require') outer.bound = true;
+    if (typescript.isFunctionLike(node) || typescript.isBlock(node) || typescript.isCaseBlock(node) || typescript.isCatchClause(node) ||
+      typescript.isForStatement(node) || typescript.isForInStatement(node) || typescript.isForOfStatement(node) ||
+      typescript.isClassLike(node) || typescript.isModuleBlock(node)) {
+      scope = { parent: outer, function: typescript.isFunctionLike(node) || typescript.isModuleBlock(node), bound: false };
     }
-    if (ts.isFunctionLike(node)) {
+    if (typescript.isFunctionLike(node)) {
       if (node.parameters.some(parameter => bindingContains(parameter.name, 'require'))) scope.bound = true;
-      if (ts.isFunctionExpression(node) && node.name?.text === 'require') scope.bound = true;
+      if (typescript.isFunctionExpression(node) && node.name?.text === 'require') scope.bound = true;
     }
-    if (ts.isClassLike(node) && node.name?.text === 'require') scope.bound = true;
-    if (ts.isVariableDeclaration(node) && bindingContains(node.name, 'require')) {
+    if (typescript.isClassLike(node) && node.name?.text === 'require') scope.bound = true;
+    if (typescript.isVariableDeclaration(node) && bindingContains(node.name, 'require')) {
       let owner = scope;
-      if (ts.isVariableDeclarationList(node.parent) && !(node.parent.flags & ts.NodeFlags.BlockScoped)) {
+      if (typescript.isVariableDeclarationList(node.parent) && !(node.parent.flags & typescript.NodeFlags.BlockScoped)) {
         while (!owner.function && owner.parent) owner = owner.parent;
       }
       owner.bound = true;
     }
-    if (ts.isImportDeclaration(node)) {
+    if (typescript.isImportDeclaration(node)) {
       const clause = node.importClause;
       if (clause?.name?.text === 'require' || (clause?.namedBindings &&
-        (ts.isNamespaceImport(clause.namedBindings) ? clause.namedBindings.name.text === 'require' :
+        (typescript.isNamespaceImport(clause.namedBindings) ? clause.namedBindings.name.text === 'require' :
           clause.namedBindings.elements.some(element => element.name.text === 'require')))) scope.bound = true;
     }
-    if (ts.isImportEqualsDeclaration(node) && node.name.text === 'require') scope.bound = true;
+    if (typescript.isImportEqualsDeclaration(node) && node.name.text === 'require') scope.bound = true;
     scopes.set(node, scope);
-    ts.forEachChild(node, child => visit(child, scope));
+    typescript.forEachChild(node, child => visit(child, scope));
   };
   visit(file, { function: true, bound: false });
   return node => {
@@ -96,56 +96,56 @@ function requireShadowing(file: ts.SourceFile): (node: ts.Node) => boolean {
   };
 }
 
-function sourceSpecifiers(file: ts.SourceFile): { specifier: string; start: number; typeOnly: boolean; kind: LoadKind }[] {
+function sourceSpecifiers(file: typescript.SourceFile): { specifier: string; start: number; typeOnly: boolean; kind: LoadKind }[] {
   const result: ReturnType<typeof sourceSpecifiers> = [];
   const shadowedRequire = requireShadowing(file);
-  const visit = (node: ts.Node): void => {
-    let expression: ts.Node | undefined;
+  const visit = (node: typescript.Node): void => {
+    let expression: typescript.Node | undefined;
     let typeOnly = false;
     let kind: LoadKind = 'static';
-    if (ts.isImportDeclaration(node)) {
+    if (typescript.isImportDeclaration(node)) {
       expression = node.moduleSpecifier;
       typeOnly = node.importClause?.isTypeOnly ?? false;
       const bindings = node.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings) && bindings.elements.length && !node.importClause?.name) {
+      if (bindings && typescript.isNamedImports(bindings) && bindings.elements.length && !node.importClause?.name) {
         typeOnly ||= bindings.elements.every(element => element.isTypeOnly);
       }
-    } else if (ts.isExportDeclaration(node)) {
+    } else if (typescript.isExportDeclaration(node)) {
       expression = node.moduleSpecifier;
       typeOnly = node.isTypeOnly;
-      if (node.exportClause && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length) {
+      if (node.exportClause && typescript.isNamedExports(node.exportClause) && node.exportClause.elements.length) {
         typeOnly ||= node.exportClause.elements.every(element => element.isTypeOnly);
       }
-    } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+    } else if (typescript.isImportEqualsDeclaration(node) && typescript.isExternalModuleReference(node.moduleReference)) {
       expression = node.moduleReference.expression;
       typeOnly = node.isTypeOnly;
       kind = 'require';
-    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+    } else if (typescript.isImportTypeNode(node) && typescript.isLiteralTypeNode(node.argument)) {
       expression = node.argument.literal;
       typeOnly = true;
-    } else if (ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) && node.expression.text === 'require' && !shadowedRequire(node)))) {
+    } else if (typescript.isCallExpression(node) &&
+      (node.expression.kind === typescript.SyntaxKind.ImportKeyword ||
+        (typescript.isIdentifier(node.expression) && node.expression.text === 'require' && !shadowedRequire(node)))) {
       expression = node.arguments[0];
-      kind = node.expression.kind === ts.SyntaxKind.ImportKeyword ? 'import' : 'require';
+      kind = node.expression.kind === typescript.SyntaxKind.ImportKeyword ? 'import' : 'require';
     }
-    if (expression && (ts.isStringLiteralLike(expression))) {
+    if (expression && (typescript.isStringLiteralLike(expression))) {
       result.push({ specifier: expression.text, start: node.getStart(file), typeOnly, kind });
     }
-    ts.forEachChild(node, visit);
+    typescript.forEachChild(node, visit);
   };
   visit(file);
   return result;
 }
 
-function abstractModule(file: ts.SourceFile): boolean {
+function abstractModule(file: typescript.SourceFile): boolean {
   let declarations = 0;
   for (const statement of file.statements) {
-    if (ts.isImportDeclaration(statement) || ts.isImportEqualsDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
-    if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) { declarations++; continue; }
-    if (ts.isClassDeclaration(statement) && statement.modifiers?.some(mod => mod.kind === ts.SyntaxKind.AbstractKeyword)) { declarations++; continue; }
-    if (ts.isFunctionDeclaration(statement) && !statement.body) { declarations++; continue; }
-    if (ts.isExportDeclaration(statement) && statement.isTypeOnly) continue;
+    if (typescript.isImportDeclaration(statement) || typescript.isImportEqualsDeclaration(statement) || typescript.isEmptyStatement(statement)) continue;
+    if (typescript.isInterfaceDeclaration(statement) || typescript.isTypeAliasDeclaration(statement)) { declarations++; continue; }
+    if (typescript.isClassDeclaration(statement) && statement.modifiers?.some(mod => mod.kind === typescript.SyntaxKind.AbstractKeyword)) { declarations++; continue; }
+    if (typescript.isFunctionDeclaration(statement) && !statement.body) { declarations++; continue; }
+    if (typescript.isExportDeclaration(statement) && statement.isTypeOnly) continue;
     return false;
   }
   return declarations > 0;
@@ -153,7 +153,7 @@ function abstractModule(file: ts.SourceFile): boolean {
 
 function summarize(config: Architecture, files: Graph['files'], edges: Edge[]): Pick<Graph, 'adjacency' | 'metrics'> {
   const adjacency = new Map((config.components ?? []).map(component => [component.name, new Set<string>()]));
-  const groups = new Map<string, { files: ts.SourceFile[]; incoming: Set<string>; outgoing: Set<string> }>();
+  const groups = new Map<string, { files: typescript.SourceFile[]; incoming: Set<string>; outgoing: Set<string> }>();
   for (const file of files.values()) {
     const component = componentOf(config, file.fileName);
     if (!component) continue;
@@ -180,7 +180,7 @@ function summarize(config: Architecture, files: Graph['files'], edges: Edge[]): 
 }
 
 export function projectGraph(context: Context): Graph {
-  const config = architecture(context);
+  const config = architectureOf(context);
   const project = config.project;
   if (!project) throw new Error('clean-architecture: project analysis requires architecture.project');
   const settings = compilerSettings(config);
@@ -216,8 +216,8 @@ export function projectGraph(context: Context): Graph {
       }
       if (readable && digestOf(contents) === previous.digest &&
         [...previous.reads].every(([file, text]) => read(file) === text) &&
-        [...previous.exists].every(([file, exists]) => ts.sys.fileExists(file) === exists) &&
-        [...previous.directories].every(([directory, exists]) => ts.sys.directoryExists(directory) === exists)) {
+        [...previous.exists].every(([file, exists]) => typescript.sys.fileExists(file) === exists) &&
+        [...previous.directories].every(([directory, exists]) => typescript.sys.directoryExists(directory) === exists)) {
         return previous.graph;
       }
     }
@@ -229,14 +229,14 @@ export function projectGraph(context: Context): Graph {
     if (text !== undefined) contents.set(file, text);
   }
   const reads = new Map<string, string | undefined>(), exists = new Map<string, boolean>(), directories = new Map<string, boolean>();
-  const host: ts.ModuleResolutionHost = {
-    readFile(file) { const text = ts.sys.readFile(file); reads.set(file, text); return text; },
-    fileExists(file) { const value = ts.sys.fileExists(file); exists.set(file, value); return value; },
-    directoryExists(directory) { const value = ts.sys.directoryExists(directory); directories.set(directory, value); return value; },
-    realpath: ts.sys.realpath,
+  const host: typescript.ModuleResolutionHost = {
+    readFile(file) { const text = typescript.sys.readFile(file); reads.set(file, text); return text; },
+    fileExists(file) { const value = typescript.sys.fileExists(file); exists.set(file, value); return value; },
+    directoryExists(directory) { const value = typescript.sys.directoryExists(directory); directories.set(directory, value); return value; },
+    realpath: typescript.sys.realpath,
     getCurrentDirectory: () => config.root,
   };
-  const resolutionCache = ts.createModuleResolutionCache(config.root, value => value, settings.options);
+  const resolutionCache = typescript.createModuleResolutionCache(config.root, value => value, settings.options);
   const files: Graph['files'] = new Map(), edges: Edge[] = [];
   const queue = [...contents.keys()];
   for (const name of queue) {
@@ -244,17 +244,19 @@ export function projectGraph(context: Context): Graph {
     const text = name === current ? context.sourceCode.text : (contents.get(name) ?? read(name));
     if (text === undefined) continue;
     contents.set(name, text);
-    const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true);
+    const source = typescript.createSourceFile(name, text, typescript.ScriptTarget.Latest, true);
     files.set(name, source);
     for (const item of sourceSpecifiers(source)) {
       if (item.typeOnly && !includeTypeOnly) continue;
-      const target = ts.resolveModuleName(item.specifier, name, settings.options, host, resolutionCache, undefined,
+      const target = typescript.resolveModuleName(item.specifier, name, settings.options, host, resolutionCache, undefined,
         moduleMode(name, settings.options, host, item.kind)).resolvedModule?.resolvedFileName;
       if (!target) continue;
       const absolute = path.resolve(target);
       edges.push({ source: name, target: absolute, ...item });
-      if (!relative(config, absolute).startsWith('../') && !slash(absolute).includes('/node_modules/') &&
-        !matches(relative(config, absolute), excludes) && !files.has(absolute)) queue.push(absolute);
+      const relativeTarget = relative(config, absolute);
+      const externalTarget = relativeTarget.startsWith('../') || slash(absolute).includes('/node_modules/');
+      const ignoredTarget = matches(relativeTarget, excludes);
+      if (!externalTarget && !ignoredTarget && !files.has(absolute)) queue.push(absolute);
     }
   }
   const graph = { files, edges, ...summarize(config, files, edges) };

@@ -1,4 +1,4 @@
-import ts from 'typescript';
+import typescript from 'typescript';
 import type { TSESTree } from '@typescript-eslint/utils';
 import { createRule, report } from '../utils/create-rule.js';
 import { typeServices } from '../utils/types.js';
@@ -14,14 +14,14 @@ export default createRule({
         if (parameter.type !== 'Identifier') continue;
         const type = checker.getTypeAtLocation(toTS.get(parameter));
         const symbol = type.getSymbol();
-        if (!symbol || !(symbol.flags & ts.SymbolFlags.Interface)) continue;
+        if (!symbol || !(symbol.flags & typescript.SymbolFlags.Interface)) continue;
         const declarations = symbol.getDeclarations() ?? [];
-        const external = (declaration: ts.Declaration) => program.isSourceFileDefaultLibrary(declaration.getSourceFile()) ||
+        const external = (declaration: typescript.Declaration) => program.isSourceFileDefaultLibrary(declaration.getSourceFile()) ||
           declaration.getSourceFile().fileName.replaceAll('\\', '/').includes('/node_modules/');
         if (!declarations.length || declarations.every(external)) continue;
         const properties = checker.getPropertiesOfType(type);
         if (!properties.some(property => property.declarations?.some(declaration =>
-          ts.isMethodSignature(declaration) || ts.isMethodDeclaration(declaration)))) continue;
+          typescript.isMethodSignature(declaration) || typescript.isMethodDeclaration(declaration)))) continue;
         const variable = context.sourceCode.getDeclaredVariables(node).find(item => item.name === parameter.name);
         if (!variable?.references.length) continue;
         const used = new Set<string>();

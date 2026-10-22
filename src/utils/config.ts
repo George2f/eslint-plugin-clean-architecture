@@ -3,13 +3,7 @@ import { Minimatch } from 'minimatch';
 import type { Architecture, Component, Context, Layer, Role } from '../types.js';
 import { defaultArchitecture, frontendArchitecture } from './defaults.js';
 
-export const roles: Role[] = ['entity', 'use-case', 'port', 'adapter', 'controller',
-  'repository', 'view', 'presenter', 'composition', 'test'];
-
 export const slash = (value: string): string => value.replaceAll('\\', '/');
-export const relative = (config: Architecture, file: string): string =>
-  slash(path.relative(config.root, file));
-
 const matchers = new Map<string, Minimatch>();
 
 export function matches(file: string, patterns: readonly string[] = []): boolean {
@@ -68,9 +62,10 @@ export function defineArchitecture(config: Architecture): Architecture {
         throw new Error(`clean-architecture: ${key} require unique nonempty names`);
       }
       names.add(item.name);
-      const allowedFields = key === 'layers' ? ['name', 'files', 'allow'] : ['name', 'files', 'public', 'actor', 'useCase'];
-      if (Object.keys(item).some(field => !allowedFields.includes(field))) {
-        throw new Error(`clean-architecture: unknown field in ${key}.${item.name}`);
+      const allowedFields = new Set(key === 'layers' ? ['name', 'files', 'allow'] : ['name', 'files', 'public', 'actor', 'useCase']);
+      const itemName = item.name;
+      for (const field of Object.keys(item)) {
+        if (!allowedFields.has(field)) throw new Error(`clean-architecture: unknown field in ${key}.${itemName}`);
       }
       strings(item.files, `${key}.${item.name}.files`);
       if (key === 'layers') strings((item as Layer).allow, `layers.${item.name}.allow`);
@@ -92,6 +87,8 @@ export function defineArchitecture(config: Architecture): Architecture {
       }
     }
   }
+  const roles: Role[] = ['entity', 'use-case', 'port', 'adapter', 'controller',
+    'repository', 'view', 'presenter', 'composition', 'test'];
   for (const [role, patterns] of Object.entries(config.roles ?? {})) {
     if (!roles.includes(role as Role)) throw new Error(`clean-architecture: unknown role ${role}`);
     strings(patterns, `roles.${role}`);
@@ -106,17 +103,19 @@ export function defineArchitecture(config: Architecture): Architecture {
     throw new Error('clean-architecture: unresolved must be ignore or report');
   }
   if (config.project) {
-    if (Object.keys(config.project).some(key => key !== 'tsconfig' && key !== 'files' && key !== 'cache')) {
-      throw new Error('clean-architecture: project accepts only tsconfig, files, and cache');
+    const projectConfig = config.project;
+    const projectKeys = new Set(['tsconfig', 'files', 'cache']);
+    for (const key of Object.keys(projectConfig)) {
+      if (!projectKeys.has(key)) throw new Error('clean-architecture: project accepts only tsconfig, files, and cache');
     }
-    if (config.project.cache !== undefined && !['run', 'strict'].includes(config.project.cache)) {
+    if (projectConfig.cache !== undefined && !['run', 'strict'].includes(projectConfig.cache)) {
       throw new Error('clean-architecture: project.cache must be run or strict');
     }
-    if (config.project.tsconfig !== undefined && typeof config.project.tsconfig !== 'string') {
+    if (projectConfig.tsconfig !== undefined && typeof projectConfig.tsconfig !== 'string') {
       throw new Error('clean-architecture: project.tsconfig must be a path');
     }
-    if (config.project.files !== undefined) strings(config.project.files, 'project.files');
-    if (!config.project.tsconfig && !config.project.files?.length) {
+    if (projectConfig.files !== undefined) strings(projectConfig.files, 'project.files');
+    if (!projectConfig.tsconfig && !projectConfig.files?.length) {
       throw new Error('clean-architecture: project requires tsconfig or files');
     }
   }
@@ -126,7 +125,7 @@ export function defineArchitecture(config: Architecture): Architecture {
 const settingsCache = new WeakMap<object, Architecture>();
 const defaultCache = new Map<string, Architecture>();
 
-export function architecture(context: Context): Architecture {
+export function architectureOf(context: Context): Architecture {
   const settings = context.settings['clean-architecture'];
   if (settings !== undefined) {
     const key = settings as object;
@@ -147,13 +146,15 @@ export function architecture(context: Context): Architecture {
   return value;
 }
 
-export function requireScope(config: Architecture, key: keyof Architecture, rule: string): void {
-  const value = config[key];
-  if (!value || (Array.isArray(value) && value.length === 0) ||
-    (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0)) {
+export function requireScope(value: unknown, key: string, rule: string): void {
+  const objectKeys = typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.keys(value) : undefined;
+  if (!value || (Array.isArray(value) && value.length === 0) || (objectKeys !== undefined && objectKeys.length === 0)) {
     throw new Error(`clean-architecture/${rule}: configure architecture.${key} before enabling this rule`);
   }
 }
+
+export const relative = (config: Architecture, file: string): string =>
+  slash(path.relative(config.root, file));
 
 export const isTest = (config: Architecture, file: string): boolean =>
   matches(relative(config, file), config.tests) || matches(relative(config, file), config.roles?.test);
