@@ -200,10 +200,11 @@ multiple reasons to change. Actor names never inferred from business identifiers
 ## no-view-data-formatting
 
 Ch. 23; heuristic, AST. Requires `roles`.
-Valid: view receives formatted data; presenter calls `amount.toFixed(2)`.
-Warn in view: known formatting method names such as `toFixed`, `toPrecision`,
-and locale/date formatting. Method names are a review signal, not type proof.
-Normal rendering, map calls, and arbitrary functions are not blanket-banned.
+Valid: view receives formatted data; presenter calls `amount.toFixed(2)`; a view
+builds date fixtures without rendering them. Warn: known formatting method names
+(`toFixed`, locale/date formatting) inside JSX or a returned value in a view.
+Tests are excluded by default. Method names are a review signal, not type proof;
+non-rendered helpers and arbitrary functions are not blanket-banned.
 
 ## prefer-segregated-interfaces
 

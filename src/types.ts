@@ -35,6 +35,8 @@ export interface Architecture {
   ignore?: string[];
   project?: { tsconfig?: string; files?: string[]; cache?: 'run' | 'strict' };
   unresolved?: 'ignore' | 'report';
+  includeTypeOnly?: boolean;
+  analyzeTests?: boolean;
 }
 
 export interface RuleOptions {

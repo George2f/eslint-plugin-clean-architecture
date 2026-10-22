@@ -104,6 +104,24 @@ discover source files under `src/`.
 On ESLint 8, TypeScript projects additionally need `@types/eslint`, because ESLint
 8 does not ship its own type declarations.
 
+### Legacy ESLint 8 config
+
+ESLint 8.57 still defaults to `.eslintrc`. Convert any flat config with
+`.eslintrc.cjs`:
+
+```js
+import { createLegacyFrontendConfig } from '@george2f/eslint-plugin-clean-architecture';
+
+module.exports = createLegacyFrontendConfig(__dirname, {
+  strict: true,
+  coverage: 'off',
+});
+```
+
+`createLegacyConfig(config)` works with backend `createConfig()` and the static
+presets too. It registers the scoped plugin and maps rule IDs from
+`clean-architecture/*` to `@george2f/clean-architecture/*`.
+
 ### Frontend profiles
 
 For a generic React/Vite/Next-style layout, use a frontend preset instead of
@@ -113,10 +131,13 @@ describing backend layers:
 import cleanArchitecture from '@george2f/eslint-plugin-clean-architecture';
 
 export default [
-  cleanArchitecture.configs.frontend,              // loose, AST-only
-  // cleanArchitecture.configs['frontend-strict'], // pages -> hooks -> services
+  cleanArchitecture.configs.frontend,                    // loose, AST-only
+  // cleanArchitecture.configs['frontend-adoption'],     // loose, warnings only
+  // cleanArchitecture.configs['frontend-strict'],       // pages -> hooks -> services
   // cleanArchitecture.configs['frontend-type-checked'],
   // cleanArchitecture.configs['frontend-strict-type-checked'],
+  // cleanArchitecture.configs['frontend-strictest'],    // strict, heuristic errors
+  // cleanArchitecture.configs['frontend-strictest-type-checked'],
 ];
 ```
 
@@ -124,8 +145,8 @@ Default frontend meaning:
 
 | Layer | Conventional folders |
 | --- | --- |
-| presentation | `src/pages`, `src/app/**/*.{jsx,tsx}`, `src/components`, `src/views`, `src/screens`, `src/layouts` |
-| application | `src/hooks`, `src/use-cases`, `src/application`, `src/app/**/action.*` |
+| presentation | `src/pages`, `src/app/**/*.{jsx,tsx}`, `src/components`, `src/views`, `src/screens`, `src/layouts`, `src/hooks/ui` |
+| application | `src/hooks/*`, `src/hooks/!(ui)/**`, `src/use-cases`, `src/application`, `src/app/**/action.*` |
 | adapters | `src/services`, `src/api`, `src/clients`, `src/lib/api`, `src/lib/http`, `src/app/**/route.*` |
 | domain | `src/domain`, `src/entities`, `src/models` |
 | composition | `src/main.*`, `src/index.*`, `src/bootstrap.*` |
@@ -133,14 +154,22 @@ Default frontend meaning:
 Loose mode allows presentation to call adapters (`pages` → `services`) directly.
 Strict mode requires presentation to go through application (`pages` → `hooks` →
 `services`). Both always forbid adapters importing presentation/application, and
-application importing presentation. Hooks are treated as application; override
-this if your hooks are presentational. `features/**` is not classified by default.
+application importing presentation. Test files (`*.test.*`, `*.spec.*`,
+`__tests__`, `cypress`, `e2e`) are excluded from layer/component checks by
+default; set `analyzeTests: true` to include them. Put UI-only hooks under
+`src/hooks/ui/**` (classified as presentation) or override the mapping.
 
-If no conventional frontend folders exist, `createFrontendConfig` warns instead
-of silently reporting zero findings. Use `createFrontendConfig(root, { strict,
-types })` when the layout or direction differs. For JS-only projects, the plain
-frontend presets require no TypeScript parser or type information. JSX files
-still need a JSX-capable parser supplied by your ESLint config.
+Frontend presets ignore type-only dependencies by default; set architecture
+`includeTypeOnly: true` or the rule option when type coupling should count.
+`features/**` is not classified by default.
+
+If no conventional frontend folders exist, static presets and
+`createFrontendConfig` warn instead of silently reporting zero findings. Use
+`createFrontendConfig(root, { strict, types, severity, heuristics })` when the
+layout or direction differs. For JS-only projects, the plain frontend presets
+require no TypeScript parser or type information. JSX files still need a
+JSX-capable parser supplied by your ESLint config. Static presets resolve the
+project root from ESLint's cwd at lint time, not the import location.
 
 ### JavaScript
 
@@ -164,15 +193,20 @@ TypeScript-only because JavaScript has no reliable type shape to analyze.
 | `strict-type-checked` | 28 checks, including heuristics and metrics | Policy errors, other warnings |
 | `strictest-type-checked` | 28 checks | All errors |
 | `frontend` | 7 loose AST policies | Errors |
+| `frontend-adoption` | 7 loose AST policies | Warnings only |
 | `frontend-strict` | 10 strict AST checks | Policy errors, heuristic warnings |
+| `frontend-strictest` | 10 strict AST checks | All errors |
 | `frontend-type-checked` | 9 loose checks, including typed heuristics | Policy errors, heuristic warnings |
 | `frontend-strict-type-checked` | 12 strict checks, including typed heuristics | Policy errors, heuristic warnings |
+| `frontend-strictest-type-checked` | 12 strict checks, including typed heuristics | All errors |
 
 The generic backend presets require **explicit volatile targets**; frontend
 profiles classify adapter folders as volatile. Actors and independent use-case
 labels are always explicit, never guessed. Immutable checks apply only to
 conventional `pure`/`immutable` files or directories; contract checks only to
 designated model paths. Unmatched paths are not silently treated as core.
+Static backend presets warn when no conventional backend folders exist, and
+frontend presets warn when no conventional frontend layout exists.
 
 `createConfig(architecture, options)` remains available for custom layouts, actor
 labels, volatility, and selectively enabling all 31 rules. See

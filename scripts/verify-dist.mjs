@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import plugin, { createConfig, createFrontendConfig, defineArchitecture, rules } from '../dist/index.js';
+import plugin, { createConfig, createFrontendConfig, createLegacyConfig, createLegacyFrontendConfig, defineArchitecture, rules } from '../dist/index.js';
 
 const require = createRequire(import.meta.url);
 const cjs = require('../dist/index.cjs');
@@ -14,6 +14,8 @@ assert.deepEqual(Object.keys(cjs.rules), Object.keys(rules));
 assert.deepEqual(Object.keys(cjs.configs), Object.keys(plugin.configs));
 assert.equal(typeof cjs.createConfig, 'function');
 assert.equal(typeof cjs.createFrontendConfig, 'function');
+assert.equal(typeof cjs.createLegacyConfig, 'function');
+assert.equal(typeof cjs.createLegacyFrontendConfig, 'function');
 assert.equal(typeof cjs.defineArchitecture, 'function');
 assert.deepEqual(catalog.rules.map(rule => rule.name), Object.keys(rules));
 for (const entry of catalog.rules) {
@@ -21,9 +23,12 @@ for (const entry of catalog.rules) {
 }
 assert.equal(typeof createConfig, 'function');
 assert.equal(typeof createFrontendConfig, 'function');
+assert.equal(typeof createLegacyConfig, 'function');
+assert.equal(typeof createLegacyFrontendConfig, 'function');
 assert.equal(typeof defineArchitecture, 'function');
 for (const name of ['recommended', 'strict', 'strictest', 'recommended-type-checked', 'strict-type-checked', 'strictest-type-checked',
-  'frontend', 'frontend-strict', 'frontend-type-checked', 'frontend-strict-type-checked']) {
+  'frontend', 'frontend-strict', 'frontend-type-checked', 'frontend-strict-type-checked',
+  'frontend-strictest', 'frontend-strictest-type-checked', 'frontend-adoption']) {
   assert.ok(plugin.configs[name], `Missing preset ${name}`);
   assert.ok(Object.keys(plugin.configs[name].rules).length > 0, `Empty preset ${name}`);
 }

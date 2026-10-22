@@ -14,7 +14,9 @@ it has a matching rule.
 Frontend profiles add frontend folder conventions without changing the book
 mapping. JavaScript executes all AST detectors; five formerly typed detectors now
 also have literal-import/local-class AST paths. Contract and interface-shape
-detectors remain TypeScript-only.
+detectors remain TypeScript-only. Test files are excluded from layer/component
+classification by default, and frontend profiles ignore type-only dependencies
+unless configured otherwise.
 
 | Chapter / section | Detectable application | Status and limits |
 | --- | --- | --- |

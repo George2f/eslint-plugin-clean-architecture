@@ -87,10 +87,11 @@ export function dependencyVisitors(context: Context, visit: (dependency: Depende
   dynamic?: (node: TSESTree.Node) => void): TSESLint.RuleListener {
   const config = architecture(context);
   const options = compilerSettings(config).options;
+  const includeTypeOnly = context.options[0]?.includeTypeOnly ?? config.includeTypeOnly ?? true;
   const collect = (node: TSESTree.Node, source: TSESTree.Node | null | undefined, typeOnly = false, kind: LoadKind = 'static'): void => {
     const specifier = literal(source);
     if (specifier === undefined) { dynamic?.(node); return; }
-    if (typeOnly && context.options[0]?.includeTypeOnly === false) return;
+    if (typeOnly && !includeTypeOnly) return;
     visit({ specifier, target: resolveDependency(config, context.physicalFilename, specifier, options, kind), node, typeOnly });
   };
   return {

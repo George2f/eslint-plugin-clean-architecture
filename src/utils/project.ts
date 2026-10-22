@@ -184,7 +184,7 @@ export function projectGraph(context: Context): Graph {
   const project = config.project;
   if (!project) throw new Error('clean-architecture: project analysis requires architecture.project');
   const settings = compilerSettings(config);
-  const includeTypeOnly = context.options[0]?.includeTypeOnly !== false;
+  const includeTypeOnly = context.options[0]?.includeTypeOnly ?? config.includeTypeOnly ?? true;
   const mode = project.cache ?? 'run';
   const excludes = ['**/node_modules/**', '**/dist/**', '**/coverage/**', '**/.git/**', ...(config.ignore ?? [])];
   const key = `${settingsId(settings)}|${project.files?.join('|') ?? ''}|${includeTypeOnly}|${mode}|${excludes.join('|')}`;

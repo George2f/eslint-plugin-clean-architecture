@@ -5,7 +5,9 @@
 - `src/utils/` owns configuration, dependency collection/resolution, typed traversal, and project snapshots.
 - Register rules in `src/index.ts`; update `docs/rules.md`, `docs/coverage.md`, README, and changelog.
 - Every rule needs chapters, principle, analysis, reliability, scopes, limitations, and meaningful allowed/forbidden cases.
-- Frontend profiles live in `src/utils/defaults.ts`; keep loose/strict direction and coverage warning aligned with README/docs.
+- Frontend profiles live in `src/utils/defaults.ts`; keep loose/strict direction, `hooks/ui` escape hatch, type-only default, and coverage warning aligned with README/docs.
+- Test files are excluded from layer/component/role checks unless `analyzeTests: true`; keep `isTest` non-recursive.
+- Static frontend presets use `settings['clean-architecture-profile']`, resolved at lint cwd; do not bake project roots into presets.
 - Five rules have optional type services with AST fallbacks: volatile construction/inheritance, port ownership, subtype rejection, polymorphic dispatch. Keep JS tests.
 - Never infer actors or volatility from names. Never promise purity, LSP, or business-design correctness.
 - No architectural autofixes. Do not include ebook text or local ebook paths in artifacts.

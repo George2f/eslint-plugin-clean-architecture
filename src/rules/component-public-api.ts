@@ -8,7 +8,8 @@ export default dependencyRule({
     if (!dependency.target) return;
     const from = componentOf(config, source), to = componentOf(config, dependency.target);
     if (to && from?.name !== to.name && !matches(relative(config, dependency.target), to.public)) {
-      return `Access ${to.name} through its public entry points, not ${dependency.specifier}`;
+      const entries = to.public.length ? to.public.join(', ') : 'none declared';
+      return `Access ${to.name} through its public entry points (${entries}), not ${relative(config, dependency.target)}`;
     }
   },
 });

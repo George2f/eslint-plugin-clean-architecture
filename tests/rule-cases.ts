@@ -96,8 +96,13 @@ const cases: Record<string, { valid: Valid[]; invalid: Invalid[] }> = {
     invalid: [invalid('import { salary } from "../actors/finance/index.js"; import { hours } from "../actors/hr/index.js";')],
   },
   'no-view-data-formatting': {
-    valid: [valid('format(value);', 'ui/view.ts'), valid('value.toFixed(2);', 'ui/presenter.ts')],
-    invalid: [invalid('value.toFixed(2);', 'ui/view.ts')],
+    valid: [
+      valid('format(value);', 'ui/view.ts'),
+      valid('value.toFixed(2);', 'ui/view.ts'),
+      valid('value.toFixed(2);', 'ui/view.test.ts'),
+      valid('value.toFixed(2);', 'ui/presenter.ts'),
+    ],
+    invalid: [invalid('export const view = () => value.toFixed(2);', 'ui/view.ts')],
   },
   'no-volatile-construction': { valid: [typed('construct-good')], invalid: [typedInvalid('construct-bad'), typedInvalid('construct-alias')] },
   'no-volatile-inheritance': { valid: [typed('inherit-good')], invalid: [typedInvalid('inherit-bad')] },

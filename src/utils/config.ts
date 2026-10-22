@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { Minimatch } from 'minimatch';
 import type { Architecture, Component, Context, Layer, Role } from '../types.js';
-import { defaultArchitecture } from './defaults.js';
+import { defaultArchitecture, frontendArchitecture } from './defaults.js';
 
 export const roles: Role[] = ['entity', 'use-case', 'port', 'adapter', 'controller',
   'repository', 'view', 'presenter', 'composition', 'test'];
@@ -42,7 +42,7 @@ export function defineArchitecture(config: Architecture): Architecture {
   }
   const allowed = new Set(['root', 'layers', 'components', 'roles', 'core', 'infrastructure',
     'volatile', 'stable', 'contracts', 'immutable', 'tests', 'testingApi', 'businessTests',
-    'ignore', 'project', 'unresolved']);
+    'ignore', 'project', 'unresolved', 'includeTypeOnly', 'analyzeTests']);
   for (const key of Object.keys(config)) {
     if (!allowed.has(key)) throw new Error(`clean-architecture: unknown architecture field ${key}`);
   }
@@ -52,6 +52,11 @@ export function defineArchitecture(config: Architecture): Architecture {
   for (const key of ['core', 'volatile', 'stable', 'contracts', 'immutable', 'tests',
     'testingApi', 'businessTests', 'ignore'] as const) {
     if (config[key] !== undefined) strings(config[key], key);
+  }
+  for (const key of ['includeTypeOnly', 'analyzeTests'] as const) {
+    if (config[key] !== undefined && typeof config[key] !== 'boolean') {
+      throw new Error(`clean-architecture: ${key} must be boolean`);
+    }
   }
   for (const key of ['layers', 'components'] as const) {
     const values = config[key];
@@ -123,19 +128,21 @@ const defaultCache = new Map<string, Architecture>();
 
 export function architecture(context: Context): Architecture {
   const settings = context.settings['clean-architecture'];
-  if (settings === undefined) {
-    let value = defaultCache.get(context.cwd);
+  if (settings !== undefined) {
+    const key = settings as object;
+    let value = settingsCache.get(key);
     if (!value) {
-      value = defineArchitecture(defaultArchitecture(context.cwd));
-      defaultCache.set(context.cwd, value);
+      value = defineArchitecture(settings as Architecture);
+      settingsCache.set(key, value);
     }
     return value;
   }
-  const key = settings as object;
-  let value = settingsCache.get(key);
+  const profile = context.settings['clean-architecture-profile'] as { strict?: boolean } | undefined;
+  const cacheKey = profile ? `${context.cwd}\0frontend\0${profile.strict === true}` : context.cwd;
+  let value = defaultCache.get(cacheKey);
   if (!value) {
-    value = defineArchitecture(settings as Architecture);
-    settingsCache.set(key, value);
+    value = defineArchitecture(profile ? frontendArchitecture(context.cwd, { strict: profile.strict }) : defaultArchitecture(context.cwd));
+    defaultCache.set(cacheKey, value);
   }
   return value;
 }
@@ -148,9 +155,17 @@ export function requireScope(config: Architecture, key: keyof Architecture, rule
   }
 }
 
+export const isTest = (config: Architecture, file: string): boolean =>
+  matches(relative(config, file), config.tests) || matches(relative(config, file), config.roles?.test);
+
+function ignoredTest(config: Architecture, file: string): boolean {
+  return config.analyzeTests !== true && isTest(config, file);
+}
+
 function unique<T extends { name: string; files: string[] }>(
   config: Architecture, file: string, values: T[] = [],
 ): T | undefined {
+  if (ignoredTest(config, file)) return undefined;
   const found = values.filter(value => matches(relative(config, file), value.files));
   if (found.length > 1) {
     throw new Error(`clean-architecture: ${relative(config, file)} ambiguously belongs to ${found.map(item => item.name).join(', ')}`);
@@ -160,12 +175,12 @@ function unique<T extends { name: string; files: string[] }>(
 
 export const layerOf = (config: Architecture, file: string): Layer | undefined => unique(config, file, config.layers);
 export const componentOf = (config: Architecture, file: string): Component | undefined => unique(config, file, config.components);
-export const hasRole = (config: Architecture, file: string, role: Role): boolean =>
-  matches(relative(config, file), config.roles?.[role]);
+export const hasRole = (config: Architecture, file: string, role: Role): boolean => {
+  if (role !== 'test' && ignoredTest(config, file)) return false;
+  return matches(relative(config, file), config.roles?.[role]);
+};
 export const inCore = (config: Architecture, file: string): boolean =>
-  matches(relative(config, file), config.core);
-export const isTest = (config: Architecture, file: string): boolean =>
-  matches(relative(config, file), config.tests) || hasRole(config, file, 'test');
+  !ignoredTest(config, file) && matches(relative(config, file), config.core);
 
 export function targetMatches(config: Architecture, patterns: string[] = [], specifier: string, target?: string): boolean {
   const packagePath = target ? slash(target).split('/node_modules/').at(-1) : undefined;
