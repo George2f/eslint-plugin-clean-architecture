@@ -1,6 +1,6 @@
 {
   "name": "@george2f/eslint-plugin-clean-architecture",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Configurable architectural checks derived from Robert C. Martin's Clean Architecture",
   "type": "module",
   "license": "MIT",

@@ -9,7 +9,8 @@ export default dependencyRule({
     if (!from || !dependency.target) return;
     const to = layerOf(config, dependency.target);
     if (to && to.name !== from.name && !from.allow.includes(to.name)) {
-      return `${relative(config, source)} in ${from.name} may not depend on ${to.name}: ${dependency.specifier}`;
+      const allowed = from.allow.length ? from.allow.join(', ') : 'none';
+      return `${relative(config, source)} is ${from.name}; it may not depend on ${relative(config, dependency.target)} (${to.name}). Allowed layers: ${allowed}`;
     }
   },
 });

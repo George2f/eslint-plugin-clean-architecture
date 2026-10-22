@@ -2,7 +2,7 @@ import type { ESLint, Rule as ESLintRule } from 'eslint';
 import packageJson from '../package.json';
 import type { Architecture, Docs, FlatConfig, Rule } from './types.js';
 import { defineArchitecture } from './utils/config.js';
-import { defaultArchitecture, frontendArchitecture, hasFrontendLayout } from './utils/defaults.js';
+import { defaultArchitecture, frontendArchitecture, hasBackendLayout, hasFrontendLayout } from './utils/defaults.js';
 import dependencyDirection from './rules/dependency-direction.js';
 import componentPublicApi from './rules/component-public-api.js';
 import noCoreInfrastructure from './rules/no-core-infrastructure.js';
@@ -89,6 +89,8 @@ export interface FrontendConfigOptions {
   strict?: boolean;
   types?: boolean;
   coverage?: 'warn' | 'off';
+  severity?: 'error' | 'warn';
+  heuristics?: 'off' | 'warn' | 'error';
 }
 
 const frontendBaseRules: Record<string, 'error' | 'warn'> = {
@@ -114,26 +116,80 @@ const frontendTypedRules: Record<string, 'error' | 'warn'> = {
 
 const warnedFrontendRoots = new Set<string>();
 
-export function createFrontendConfig(root: string, options: FrontendConfigOptions = {}): FlatConfig {
-  if (!options || typeof options !== 'object' ||
-    Object.keys(options).some(key => !['strict', 'types', 'coverage'].includes(key)) ||
-    ['strict', 'types'].some(key => key in options && typeof options[key as keyof FrontendConfigOptions] !== 'boolean') ||
-    (options.coverage !== undefined && !['warn', 'off'].includes(options.coverage))) {
-    throw new Error('clean-architecture: invalid createFrontendConfig options');
-  }
-  const architecture = defineArchitecture(frontendArchitecture(root, { strict: options.strict }));
-  if ((options.coverage ?? 'warn') === 'warn' && !hasFrontendLayout(root) && !warnedFrontendRoots.has(root)) {
+function warnFrontendCoverage(root: string, coverage: 'warn' | 'off'): void {
+  if (coverage === 'warn' && !hasFrontendLayout(root) && !warnedFrontendRoots.has(root)) {
     warnedFrontendRoots.add(root);
     console.warn('clean-architecture: no conventional frontend folders matched; frontend architecture rules are inactive. Configure frontend conventions with createFrontendConfig overrides.');
   }
+}
+
+function frontendRules(options: FrontendConfigOptions): Record<string, 'error' | 'warn'> {
+  const strict = options.strict ?? false;
+  const types = options.types ?? false;
+  const severity = options.severity ?? 'error';
+  const heuristics = options.heuristics ?? (strict || types ? 'warn' : 'off');
+  const rules: Record<string, 'error' | 'warn'> = {};
+  for (const name of Object.keys(frontendBaseRules)) rules[name] = severity;
+  if (heuristics !== 'off') {
+    if (strict) for (const name of Object.keys(frontendStrictRules)) rules[name] = heuristics;
+    if (types) for (const name of Object.keys(frontendTypedRules)) rules[name] = heuristics;
+  }
+  return rules;
+}
+
+export function createFrontendConfig(root: string, options: FrontendConfigOptions = {}): FlatConfig {
+  if (!options || typeof options !== 'object' ||
+    Object.keys(options).some(key => !['strict', 'types', 'coverage', 'severity', 'heuristics'].includes(key)) ||
+    ['strict', 'types'].some(key => key in options && typeof options[key as keyof FrontendConfigOptions] !== 'boolean') ||
+    (options.coverage !== undefined && !['warn', 'off'].includes(options.coverage)) ||
+    (options.severity !== undefined && !['error', 'warn'].includes(options.severity)) ||
+    (options.heuristics !== undefined && !['off', 'warn', 'error'].includes(options.heuristics))) {
+    throw new Error('clean-architecture: invalid createFrontendConfig options');
+  }
+  const architecture = defineArchitecture(frontendArchitecture(root, { strict: options.strict }));
+  warnFrontendCoverage(root, options.coverage ?? 'warn');
   const strict = options.strict ?? false;
   const types = options.types ?? false;
   return {
     name: `clean-architecture/frontend${strict ? '-strict' : ''}${types ? '-type-checked' : ''}`,
     plugins: { 'clean-architecture': plugin },
     settings: { 'clean-architecture': architecture },
-    rules: { ...frontendBaseRules, ...(strict ? frontendStrictRules : {}), ...(types ? frontendTypedRules : {}) },
+    rules: frontendRules(options),
   };
+}
+
+function frontendPreset(name: string, options: FrontendConfigOptions): FlatConfig {
+  warnFrontendCoverage(process.cwd(), options.coverage ?? 'warn');
+  return {
+    name: `clean-architecture/${name}`,
+    plugins: { 'clean-architecture': plugin },
+    settings: { 'clean-architecture-profile': { strict: options.strict === true } },
+    rules: frontendRules(options),
+  };
+}
+
+export interface LegacyConfig {
+  plugins: string[];
+  parserOptions: { ecmaVersion: 'latest'; sourceType: 'module' };
+  settings?: Record<string, unknown>;
+  rules: Record<string, 'error' | 'warn'>;
+}
+
+export function createLegacyConfig(config: FlatConfig): LegacyConfig {
+  const rules: Record<string, 'error' | 'warn'> = {};
+  for (const [name, severity] of Object.entries(config.rules)) {
+    rules[name.replace(/^clean-architecture\//, '@george2f/clean-architecture/')] = severity;
+  }
+  return {
+    plugins: ['@george2f/clean-architecture'],
+    parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    ...(config.settings ? { settings: config.settings } : {}),
+    rules,
+  };
+}
+
+export function createLegacyFrontendConfig(root: string, options: FrontendConfigOptions = {}): LegacyConfig {
+  return createLegacyConfig(createFrontendConfig(root, options));
 }
 
 function severity(rule: Rule, level: ConfigOptions['level']): 'error' | 'warn' {
@@ -171,27 +227,48 @@ export function createConfig(architecture: Architecture, options: ConfigOptions 
   };
 }
 
-for (const level of ['recommended', 'strict', 'strictest'] as const) {
-  for (const typed of [false, true]) {
-    const name = `${level}${typed ? '-type-checked' : ''}`;
-    const config = createConfig(defaultArchitecture(process.cwd()), {
-      level, types: typed, project: typed, completeness: typed,
-    });
-    config.name = `clean-architecture/${name}`;
-    // Resolve conventions against ESLint's cwd, not where this module was imported.
-    delete config.settings;
-    plugin.configs[name] = config;
+const warnedBackendRoots = new Set<string>();
+
+function warnBackendCoverage(root: string): void {
+  if (!hasBackendLayout(root) && !warnedBackendRoots.has(root)) {
+    warnedBackendRoots.add(root);
+    console.warn('clean-architecture: no conventional backend folders matched; backend layer/role rules are inactive. Use explicit architecture settings or a frontend preset.');
   }
 }
 
-for (const strict of [false, true]) {
-  for (const types of [false, true]) {
-    const name = `frontend${strict ? '-strict' : ''}${types ? '-type-checked' : ''}`;
+for (const level of ['recommended', 'strict', 'strictest'] as const) {
+  for (const typed of [false, true]) {
+    const name = `${level}${typed ? '-type-checked' : ''}`;
     Object.defineProperty(plugin.configs, name, {
       enumerable: true,
-      get: () => createFrontendConfig(process.cwd(), { strict, types }),
+      get: () => {
+        warnBackendCoverage(process.cwd());
+        const config = createConfig(defaultArchitecture(process.cwd()), {
+          level, types: typed, project: typed, completeness: typed,
+        });
+        config.name = `clean-architecture/${name}`;
+        // Resolve conventions against ESLint's cwd, not where this module was imported.
+        delete config.settings;
+        return config;
+      },
     });
   }
+}
+
+const frontendPresets: [string, FrontendConfigOptions][] = [
+  ['frontend', { strict: false, heuristics: 'off' }],
+  ['frontend-type-checked', { strict: false, types: true, heuristics: 'warn' }],
+  ['frontend-strict', { strict: true, heuristics: 'warn' }],
+  ['frontend-strict-type-checked', { strict: true, types: true, heuristics: 'warn' }],
+  ['frontend-strictest', { strict: true, heuristics: 'error' }],
+  ['frontend-strictest-type-checked', { strict: true, types: true, heuristics: 'error' }],
+  ['frontend-adoption', { strict: false, heuristics: 'off', severity: 'warn' }],
+];
+for (const [name, options] of frontendPresets) {
+  Object.defineProperty(plugin.configs, name, {
+    enumerable: true,
+    get: () => frontendPreset(name, options),
+  });
 }
 
 export { defineArchitecture };

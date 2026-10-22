@@ -4,6 +4,12 @@ import type { Architecture } from '../types.js';
 
 const extensions = 'js,jsx,ts,tsx,mjs,cjs,mts,cts';
 
+export function hasBackendLayout(root: string): boolean {
+  const directories = ['domain', 'entities', 'application', 'use-cases', 'usecases',
+    'adapters', 'infrastructure', 'presentation', 'ui', 'controllers', 'repositories'];
+  return directories.some(directory => fs.existsSync(path.join(root, 'src', directory)));
+}
+
 export function hasFrontendLayout(root: string): boolean {
   const directories = [
     'pages', 'app', 'components', 'views', 'screens', 'layouts',
@@ -16,8 +22,8 @@ export function hasFrontendLayout(root: string): boolean {
 }
 
 export function frontendArchitecture(root: string, options: { strict?: boolean } = {}): Architecture {
-  const presentation = ['src/{pages,components,views,screens,layouts}/**', `src/app/**/*.{jsx,tsx}`];
-  const application = ['src/{hooks,use-cases,application}/**', `src/app/**/action*.{js,ts}`];
+  const presentation = ['src/{pages,components,views,screens,layouts}/**', 'src/hooks/ui/**', `src/app/**/*.{jsx,tsx}`];
+  const application = [`src/hooks/*.{${extensions}}`, 'src/hooks/!(ui)/**', 'src/{use-cases,application}/**', `src/app/**/action*.{js,ts}`];
   const adapters = ['src/{services,api,clients}/**', 'src/lib/{api,http}/**', `src/app/**/route.{js,ts}`];
   const domain = 'src/{domain,entities,models}';
   const tests = [`**/*.{test,spec}.{${extensions}}`, '**/{test,tests,__tests__}/**', 'cypress/**', 'e2e/**'];
@@ -58,6 +64,7 @@ export function frontendArchitecture(root: string, options: { strict?: boolean }
     tests,
     businessTests: [],
     testingApi: [],
+    includeTypeOnly: false,
     ignore: ['dist/**', 'build/**', 'coverage/**', '.next/**'],
     project: fs.existsSync(path.join(root, 'tsconfig.json')) ? { tsconfig: 'tsconfig.json' } : { files: ['src/**/*'] },
   };
@@ -77,7 +84,7 @@ export function defaultArchitecture(root: string): Architecture {
       { name: 'application', files: [`${application}/**`], allow: ['domain'] },
       { name: 'adapters', files: [`${adapters}/**`], allow: ['domain', 'application'] },
       { name: 'presentation', files: [`${presentation}/**`], allow: ['domain', 'application', 'adapters'] },
-      { name: 'composition', files: [`src/{main,bootstrap}.${extension}`, 'src/{bootstrap,composition}/**'], allow: ['domain', 'application', 'adapters', 'presentation'] },
+      { name: 'composition', files: [`src/{main,bootstrap,index}.${extension}`, 'src/{bootstrap,composition}/**'], allow: ['domain', 'application', 'adapters', 'presentation'] },
     ],
     components: ([
       ['domain', domain], ['application', application], ['adapters', adapters], ['presentation', presentation],
@@ -94,7 +101,7 @@ export function defaultArchitecture(root: string): Architecture {
       repository: [`${adapters}/{repositories,persistence,database}/**`],
       controller: [`${adapters}/controllers/**`, `${presentation}/controllers/**`],
       view: [`${presentation}/views/**`], presenter: [`${presentation}/presenters/**`, `${adapters}/presenters/**`],
-      composition: [`src/{main,bootstrap}.${extension}`, 'src/{bootstrap,composition}/**'], test: tests,
+      composition: [`src/{main,bootstrap,index}.${extension}`, 'src/{bootstrap,composition}/**'], test: tests,
     },
     infrastructure: {
       framework: ['express', 'fastify', 'koa', 'next', 'react', 'vue', '@angular/**', '@nestjs/**', `${adapters}/frameworks/**`],

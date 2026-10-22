@@ -5,6 +5,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
+### Added
+
+- `createLegacyConfig()` / `createLegacyFrontendConfig()` for ESLint 8
+  `.eslintrc` setups, with scoped plugin registration and rule-ID mapping.
+- `frontend-strictest`, `frontend-strictest-type-checked`, and
+  `frontend-adoption` presets.
+- `src/hooks/ui/**` presentation escape hatch; `src/hooks/*` remains application.
+- Static frontend presets resolve the project root at lint time instead of baking
+  `process.cwd()` at import; static backend/frontend presets warn when no
+  conventional folders match.
+- Backend `src/index.*` is treated as composition rather than application code.
+- Diagnostics now include the offending source/target and allowed layers/public
+  entry points.
+
+### Changed
+
+- Test files (`*.test.*`, `*.spec.*`, `__tests__`, `cypress`, `e2e`) are excluded
+  from layer/component checks by default. Set `analyzeTests: true` to include them.
+- Frontend profiles ignore type-only boundary dependencies by default. Set
+  `includeTypeOnly: true` to include them.
+- `no-view-data-formatting` only reports formatting calls in JSX or returned
+  values and no longer fires on test fixtures, date arithmetic, or non-rendered
+  helpers.
+- Backend presets are now lazy and warn when their conventions match no folders.
+- `createFrontendConfig()` supports `severity` and `heuristics` controls used by
+  adoption/strictest presets.
+
 ## [0.2.1] - 2026-10-22
 
 ### Changed

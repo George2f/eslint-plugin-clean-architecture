@@ -22,7 +22,7 @@ Defaults are an explicit convention, not inference about arbitrary code:
 | Application layer/component | `application/**`, `use-cases/**`, `usecases/**` |
 | Adapter layer/component | `adapters/**`, `infrastructure/**` |
 | Presentation layer/component | `presentation/**`, `ui/**` |
-| Composition | `main.*`, `bootstrap.*`, `bootstrap/**`, `composition/**` |
+| Composition | `main.*`, `index.*`, `bootstrap.*`, `bootstrap/**`, `composition/**` |
 | Public component entries | `index.*`, `public.*` at each component root |
 | Entities | `entities/**`, `domain/entities/**` |
 | Ports | `ports/**` and `ports.*` directly under conventional component roots |
@@ -53,13 +53,16 @@ imaginary mapping; use the helper below.
 
 ## Frontend profiles
 
-`plugin.configs.frontend`, `frontend-strict`, `frontend-type-checked`, and
-`frontend-strict-type-checked` use frontend conventions and work without settings:
+`plugin.configs.frontend`, `frontend-adoption`, `frontend-strict`,
+`frontend-strictest`, `frontend-type-checked`, `frontend-strict-type-checked`,
+and `frontend-strictest-type-checked` use frontend conventions and work without
+settings. Static presets resolve the actual project root from ESLint's cwd at
+lint time, not from the config import location.
 
 | Purpose | Frontend paths under `src/` |
 | --- | --- |
-| Presentation | `pages/**`, `app/**/*.jsx`, `app/**/*.tsx`, `components/**`, `views/**`, `screens/**`, `layouts/**` |
-| Application | `hooks/**`, `use-cases/**`, `application/**`, `app/**/action.*` |
+| Presentation | `pages/**`, `app/**/*.jsx`, `app/**/*.tsx`, `components/**`, `views/**`, `screens/**`, `layouts/**`, `hooks/ui/**` |
+| Application | `hooks/*`, `hooks/!(ui)/**`, `use-cases/**`, `application/**`, `app/**/action.*` |
 | Adapters | `services/**`, `api/**`, `clients/**`, `lib/api/**`, `lib/http/**`, `app/**/route.*` |
 | Domain | `domain/**`, `entities/**`, `models/**` |
 | Composition | `main.*`, `index.*`, `bootstrap.*` |
@@ -76,21 +79,43 @@ Loose frontend layers:
 - presentation → domain, application, adapters
 - composition → all
 
-Strict frontend layers remove presentation → adapters. Hooks are application and
-services/api are adapters. `features/**` is intentionally unclassified; map it
+Strict frontend layers remove presentation → adapters. Hooks are application
+except `hooks/ui/**`, which is presentation; services/api are adapters. Tests
+(`*.test.*`, `*.spec.*`, `__tests__`, `cypress`, `e2e`) are excluded from layer
+and component classification unless `analyzeTests: true` is set. Frontend
+profiles set `includeTypeOnly: false`, so type-only DTO imports do not violate
+runtime boundaries. `features/**` is intentionally unclassified; map it
 explicitly if you use feature slices. Adapter folders are volatile; domain-only
 `core` keeps React/Vue imports from being treated as core policy.
 
 For custom frontend direction, call:
 
 ```js
-createFrontendConfig(root, { strict: true, types: true, coverage: 'warn' })
+createFrontendConfig(root, {
+  strict: true,
+  types: true,
+  coverage: 'warn',
+  severity: 'error',     // base boundary rules
+  heuristics: 'warn',    // 'off' | 'warn' | 'error'
+})
 ```
 
-The plain `frontend` presets need no TypeScript parser. JSX still needs a
+`frontend-adoption` keeps only base boundaries as warnings for ratcheting.
+`frontend-strictest`/`frontend-strictest-type-checked` promote heuristics to
+errors. The plain `frontend` presets need no TypeScript parser. JSX still needs a
 JSX-capable parser supplied by your ESLint config. If no conventional frontend
-folders exist, `createFrontendConfig` emits one warning instead of silently
-running with dormant rules. `coverage: 'off'` suppresses that warning.
+folders exist, presets/`createFrontendConfig` emit one warning instead of
+silently running with dormant rules. `coverage: 'off'` suppresses that warning.
+
+Legacy `.eslintrc`:
+
+```js
+const { createLegacyFrontendConfig } = require('@george2f/eslint-plugin-clean-architecture');
+module.exports = createLegacyFrontendConfig(__dirname, { strict: true });
+```
+
+`createLegacyConfig(flatConfig)` maps rule IDs to
+`@george2f/clean-architecture/*`, registers the scoped plugin, and copies settings.
 
 ## Custom architecture
 
@@ -117,6 +142,8 @@ External-package declaration paths are recognized under `node_modules`.
 | `testingApi` | Permitted testing API files |
 | `ignore` | File globs excluded from rule evaluation and project graph |
 | `project` | `{ tsconfig?: string, files?: string[], cache?: 'run' \| 'strict' }`; at least one root source required; `files` overrides tsconfig roots while retaining resolver options. `run` caches one graph per config/run; `strict` revalidates external file/package changes |
+| `includeTypeOnly` | Include type-only imports in dependency/project checks. Defaults to true; frontend profiles set false |
+| `analyzeTests` | Include test files in layer/component/role classification. Defaults to false |
 | `unresolved` | `ignore` (default) or `report`; latter selects completeness check in helper |
 
 Ambiguous layer/component membership throws; ordering is not an escape hatch.
@@ -211,8 +238,10 @@ rules: {
 - `threshold`: metrics only, 0..1. Defaults: SDP 0, SAP 0.5, distance 0.5.
 - `maxTypeNodes`: contract traversal only, integer >=10, default 2000. Exhaustion
   raises explicit error; it never reports success after silently truncating.
-- `includeTypeOnly`: dependency/graph checks, default true. Excluding types changes
-  interpretation from source dependency enforcement toward runtime coupling.
+- `includeTypeOnly`: dependency/graph checks. Defaults to architecture
+  `includeTypeOnly`, then true. Frontend profiles default to false. Excluding
+  types changes interpretation from source dependency enforcement toward runtime
+  coupling.
 
 Generic option schema validates these values. Options only affect their documented
 analysis family; do not use metric thresholds to configure non-metric checks.

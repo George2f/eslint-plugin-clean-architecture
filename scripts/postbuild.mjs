@@ -9,6 +9,8 @@ if (!source.includes(marker)) {
 module.exports = Object.assign(module.exports.default, {
   createConfig: module.exports.createConfig,
   createFrontendConfig: module.exports.createFrontendConfig,
+  createLegacyConfig: module.exports.createLegacyConfig,
+  createLegacyFrontendConfig: module.exports.createLegacyFrontendConfig,
   defineArchitecture: module.exports.defineArchitecture,
   rules: module.exports.rules,
   default: module.exports.default,

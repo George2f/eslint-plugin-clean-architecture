@@ -5,11 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { Linter } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
-import plugin, { createConfig, createFrontendConfig, defineArchitecture, rules } from '../src/index.js';
+import plugin, { createConfig, createFrontendConfig, createLegacyFrontendConfig, defineArchitecture, rules } from '../src/index.js';
 import type { Architecture, Context } from '../src/types.js';
 import { architecture, file, root } from './architecture.js';
 import { layerOf, matches, targetMatches } from '../src/utils/config.js';
-import { frontendArchitecture } from '../src/utils/defaults.js';
+import { defaultArchitecture, frontendArchitecture } from '../src/utils/defaults.js';
 import { project, lintProject } from './project-cases.js';
 import { projectGraph } from '../src/utils/project.js';
 import { createESLint, createLinter } from './eslint-compat.js';
@@ -76,10 +76,18 @@ describe('catalog and presets', () => {
       }
     }
     for (const [name, count] of [['frontend', 7], ['frontend-type-checked', 9],
-      ['frontend-strict', 10], ['frontend-strict-type-checked', 12]] as const) {
+      ['frontend-strict', 10], ['frontend-strict-type-checked', 12],
+      ['frontend-strictest', 10], ['frontend-strictest-type-checked', 12],
+      ['frontend-adoption', 7]] as const) {
       const preset = plugin.configs[name] as Linter.Config;
       expect(Object.keys(preset.rules ?? {})).toHaveLength(count);
-      expect(preset.settings?.['clean-architecture']).toBeDefined();
+      expect(preset.settings?.['clean-architecture-profile']).toBeDefined();
+      if (name.startsWith('frontend-strictest')) {
+        expect(Object.values(preset.rules ?? {}).every(value => value === 'error')).toBe(true);
+      }
+      if (name === 'frontend-adoption') {
+        expect(Object.values(preset.rules ?? {}).every(value => value === 'warn')).toBe(true);
+      }
     }
   });
 });
@@ -95,7 +103,7 @@ describe('frontend profile', () => {
     const messages = lintFrontend(createFrontendConfig(frontendRoot, { coverage: 'off' }), 'src/services/bad.js');
     expect(messages).toEqual([expect.objectContaining({
       ruleId: 'clean-architecture/dependency-direction',
-      message: expect.stringContaining('adapters may not depend on presentation'),
+      message: expect.stringContaining('is adapters; it may not depend on src/pages/Users.js (presentation). Allowed layers: domain'),
     })]);
   });
   it('runs volatile construction checks in JavaScript without type services', () => {
@@ -114,6 +122,47 @@ describe('frontend profile', () => {
     expect(layerOf(config, path.join(frontendRoot, 'src/app/users/page.jsx'))?.name).toBe('presentation');
     expect(layerOf(config, path.join(frontendRoot, 'src/app/users/route.js'))?.name).toBe('adapters');
     expect(layerOf(config, path.join(frontendRoot, 'src/app/users/action.js'))?.name).toBe('application');
+  });
+  it('keeps test files out of architecture layers by default', () => {
+    const config = createFrontendConfig(frontendRoot, { strict: true, coverage: 'off' });
+    const code = 'import { listUsers } from "../services/users.js"; export const testUsers = listUsers;';
+    const messages = createLinter({ cwd: frontendRoot }).verify(code, [{
+      files: ['**/*.ts'], languageOptions: { parser }, ...config,
+    }], { filename: path.join(frontendRoot, 'src/pages/Users.test.ts') });
+    expect(messages).toEqual([]);
+  });
+  it('ignores type-only imports in frontend boundary checks by default', () => {
+    const config = createFrontendConfig(frontendRoot, { strict: true, coverage: 'off' });
+    const code = 'import type { User } from "../services/types.js"; export type View = User;';
+    const messages = createLinter({ cwd: frontendRoot }).verify(code, [{
+      files: ['**/*.ts'], languageOptions: { parser }, ...config,
+    }], { filename: path.join(frontendRoot, 'src/pages/TypedUsers.ts') });
+    expect(messages).toEqual([]);
+  });
+  it('provides a UI-hook escape hatch and cwd-independent static presets', () => {
+    const config = frontendArchitecture(frontendRoot);
+    expect(layerOf(config, path.join(frontendRoot, 'src/hooks/ui/useCallout.ts'))?.name).toBe('presentation');
+    expect(layerOf(config, path.join(frontendRoot, 'src/hooks/useData.ts'))?.name).toBe('application');
+    const preset = plugin.configs.frontend as Linter.Config;
+    expect(preset.settings?.['clean-architecture']).toBeUndefined();
+    expect(preset.settings?.['clean-architecture-profile']).toEqual({ strict: false });
+    const strict = plugin.configs['frontend-strict'] as Linter.Config;
+    const messages = createLinter({ cwd: frontendRoot }).verify('import { listUsers } from "../services/users.js";', [{
+      files: ['**/*.js'], ...strict,
+    }], { filename: path.join(frontendRoot, 'src/pages/StaticPreset.js') });
+    expect(messages).toEqual([expect.objectContaining({ ruleId: 'clean-architecture/dependency-direction' })]);
+  });
+  it('treats backend src/index.* as composition, not application code', () => {
+    const config = defaultArchitecture(root);
+    expect(layerOf(config, path.join(root, 'src/index.tsx'))?.name).toBe('composition');
+  });
+  it('provides a legacy-config adapter', () => {
+    const legacy = createLegacyFrontendConfig(frontendRoot, { strict: true, coverage: 'off' });
+    expect(legacy.plugins).toEqual(['@george2f/clean-architecture']);
+    expect(legacy.parserOptions).toEqual({ ecmaVersion: 'latest', sourceType: 'module' });
+    expect(legacy.settings?.['clean-architecture']).toBeDefined();
+    expect(legacy.rules['@george2f/clean-architecture/dependency-direction']).toBe('error');
+    expect(legacy.rules['clean-architecture/dependency-direction']).toBeUndefined();
   });
   it('warns when no conventional frontend layout is present', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clean-architecture-'));
