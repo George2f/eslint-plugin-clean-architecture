@@ -1,5 +1,13 @@
 # Configuration
 
+## Compatibility
+
+The plugin supports ESLint 8.57, 9 and 10 flat config. Node support is
+`^18.18.0 || ^20.9.0 || >=21.1.0`; ESLint 10 itself requires Node 20.19+,
+22.13+, or 24+. CommonJS `require()` returns the plugin directly and also exposes
+named helpers. On ESLint 8, TypeScript consumers need `@types/eslint` because
+ESLint 8 does not ship declarations.
+
 ## Default presets
 
 `plugin.configs.recommended`, `strict`, and `strictest` work without settings.
@@ -77,10 +85,14 @@ for authoring; `createConfig()` validates as well.
 Explicit settings replace conventions rather than merging in unexpected roles.
 
 ```js
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createConfig } from '@george2f/eslint-plugin-clean-architecture';
 
+const root = dirname(fileURLToPath(import.meta.url));
+
 export default [createConfig({
-  root: import.meta.dirname,
+  root,
   layers: [
     { name: 'business', files: ['lib/business/**'], allow: [] },
     { name: 'delivery', files: ['lib/delivery/**'], allow: ['business'] },
@@ -97,11 +109,14 @@ completeness check. Inspect the returned `rules` for the exact enabled set.
 ## Typed and project checks
 
 ```js
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import parser from '@typescript-eslint/parser';
 import { createConfig } from '@george2f/eslint-plugin-clean-architecture';
 
+const root = dirname(fileURLToPath(import.meta.url));
 const architecture = {
-  root: import.meta.dirname,
+  root,
   core: ['src/domain/**', 'src/application/**'],
   contracts: ['src/application/contracts/**'],
   infrastructure: { transport: ['express'], persistence: ['pg'] },
@@ -112,7 +127,7 @@ export default [{
   files: ['src/**/*.ts'],
   languageOptions: {
     parser,
-    parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
+    parserOptions: { project: './tsconfig.json', tsconfigRootDir: root },
   },
   ...createConfig(architecture, { level: 'strict', types: true, project: true }),
 }];

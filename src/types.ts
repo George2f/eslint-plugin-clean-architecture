@@ -1,3 +1,4 @@
+import type { ESLint } from 'eslint';
 import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
 
 export type Role = 'entity' | 'use-case' | 'port' | 'adapter' | 'controller' |
@@ -67,4 +68,11 @@ export interface Dependency {
   target?: string;
   node: TSESTree.Node;
   typeOnly: boolean;
+}
+
+export interface FlatConfig {
+  name: string;
+  plugins: Record<string, ESLint.Plugin>;
+  settings?: Record<string, unknown>;
+  rules: Record<string, 'error' | 'warn'>;
 }

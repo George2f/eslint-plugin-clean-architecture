@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run verify:dist
+      - run: npx --yes publint
+      - run: npm pack --dry-run
+      - name: Create GitHub release from the changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          VERSION="${TAG#v}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; skipping"
+          else
+            node scripts/changelog-notes.mjs "$VERSION" > /tmp/release-notes.md
+            gh release create "$TAG" --title "$TAG" --notes-file /tmp/release-notes.md
+          fi
+      - name: Publish unless the version already exists
+        run: |
+          PACKAGE=$(node -p "require('./package.json').name")
+          VERSION="${GITHUB_REF_NAME#v}"
+          if npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
+            echo "v$VERSION is already published; skipping"
+          else
+            npm publish --provenance
+          fi
