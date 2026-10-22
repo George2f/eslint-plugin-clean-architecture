@@ -2,6 +2,67 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Architecture } from '../types.js';
 
+const extensions = 'js,jsx,ts,tsx,mjs,cjs,mts,cts';
+
+export function hasFrontendLayout(root: string): boolean {
+  const directories = [
+    'pages', 'app', 'components', 'views', 'screens', 'layouts',
+    'hooks', 'use-cases', 'application', 'services', 'api', 'clients',
+    'domain', 'entities', 'models',
+  ];
+  return directories.some(directory => fs.existsSync(path.join(root, 'src', directory))) ||
+    ['main', 'index', 'bootstrap'].some(name => fs.existsSync(path.join(root, 'src', `${name}.tsx`))) ||
+    ['main', 'index', 'bootstrap'].some(name => fs.existsSync(path.join(root, 'src', `${name}.jsx`)));
+}
+
+export function frontendArchitecture(root: string, options: { strict?: boolean } = {}): Architecture {
+  const presentation = ['src/{pages,components,views,screens,layouts}/**', `src/app/**/*.{jsx,tsx}`];
+  const application = ['src/{hooks,use-cases,application}/**', `src/app/**/action*.{js,ts}`];
+  const adapters = ['src/{services,api,clients}/**', 'src/lib/{api,http}/**', `src/app/**/route.{js,ts}`];
+  const domain = 'src/{domain,entities,models}';
+  const tests = [`**/*.{test,spec}.{${extensions}}`, '**/{test,tests,__tests__}/**', 'cypress/**', 'e2e/**'];
+  const composition = `src/{main,index,bootstrap}.{${extensions}}`;
+  const strict = options.strict ?? false;
+  return {
+    root,
+    layers: [
+      { name: 'domain', files: [`${domain}/**`], allow: [] },
+      { name: 'application', files: application, allow: ['domain', 'adapters'] },
+      { name: 'adapters', files: adapters, allow: ['domain'] },
+      { name: 'presentation', files: presentation, allow: strict ? ['domain', 'application'] : ['domain', 'application', 'adapters'] },
+      { name: 'composition', files: [composition], allow: ['domain', 'application', 'adapters', 'presentation'] },
+    ],
+    core: [`${domain}/**`],
+    roles: {
+      entity: [`${domain}/**`],
+      'use-case': application,
+      port: ['src/{domain,application,hooks}/ports/**', `src/{domain,application,hooks}/ports.{${extensions}}`],
+      adapter: adapters,
+      controller: ['src/routes/**', `src/app/**/{route,action}.{${extensions}}`],
+      repository: ['src/{services,api}/repositories/**'],
+      view: presentation,
+      presenter: ['src/presenters/**', `src/**/*.presenter.{${extensions}}`],
+      composition: [composition],
+      test: tests,
+    },
+    infrastructure: {
+      framework: ['react', 'react-dom', 'vue', 'svelte', 'next', '@angular/**', 'solid-js'],
+      persistence: ['localforage', 'dexie', 'idb', '@react-native-async-storage/async-storage'],
+      transport: ['axios', 'ky', 'swr', '@tanstack/react-query', 'graphql-request', 'superagent', 'ofetch', 'undici'],
+      platform: ['node:fs', 'node:child_process', 'node:os'],
+      hardware: [],
+    },
+    volatile: adapters,
+    contracts: [],
+    immutable: [],
+    tests,
+    businessTests: [],
+    testingApi: [],
+    ignore: ['dist/**', 'build/**', 'coverage/**', '.next/**'],
+    project: fs.existsSync(path.join(root, 'tsconfig.json')) ? { tsconfig: 'tsconfig.json' } : { files: ['src/**/*'] },
+  };
+}
+
 export function defaultArchitecture(root: string): Architecture {
   const domain = 'src/{domain,entities}';
   const application = 'src/{application,use-cases,usecases}';

@@ -1,19 +1,43 @@
 import { createRule, report } from '../utils/create-rule.js';
 import { architecture, inCore, isVolatile } from '../utils/config.js';
-import { declarationsOf, typeServices } from '../utils/types.js';
+import { resolveDependency } from '../utils/dependencies.js';
+import { declarationsOf, hasTypeServices } from '../utils/types.js';
+import type { Architecture, Context } from '../types.js';
 import type { TSESTree } from '@typescript-eslint/utils';
+
+function importTargets(context: Context, config: Architecture): Map<string, string | undefined> {
+  const result = new Map<string, string | undefined>();
+  for (const statement of context.sourceCode.ast.body) {
+    if (statement.type !== 'ImportDeclaration' || statement.source.type !== 'Literal') continue;
+    const target = resolveDependency(config, context.physicalFilename, String(statement.source.value));
+    for (const item of statement.specifiers) result.set(item.local.name, target);
+  }
+  return result;
+}
 
 export default createRule({
   name: 'no-volatile-inheritance', description: 'Keep policy independent of volatile concrete base classes',
-  chapters: [11, 32], principle: 'Dependency Inversion', analysis: 'types', scopes: ['core', 'volatile'],
-  limitations: 'Uses resolved superclass declaration and explicit volatility classification. Stable concrete base classes are allowed.',
+  chapters: [11, 32], principle: 'Dependency Inversion', analysis: 'ast', scopes: ['core', 'volatile'],
+  limitations: 'Tracks literal default, named, and namespace imports. Aliases and dynamic requires are not reconstructed. TypeScript analysis is used when available; stable concrete base classes are allowed.',
   create(context) {
-    typeServices(context);
     const config = architecture(context);
     if (!inCore(config, context.physicalFilename)) return {};
+    const imported = importTargets(context, config);
+    const typed = hasTypeServices(context);
     const check = (node: TSESTree.ClassDeclaration | TSESTree.ClassExpression): void => {
-      if (node.superClass && declarationsOf(context, node.superClass).some(declaration => isVolatile(config, '', declaration.getSourceFile().fileName))) {
-        report(context, node.superClass, 'Do not derive policy from a volatile concrete implementation', [11, 32]);
+      const superClass = node.superClass;
+      if (!superClass) return;
+      if (typed) {
+        if (declarationsOf(context, superClass).some(declaration => isVolatile(config, '', declaration.getSourceFile().fileName))) {
+          report(context, superClass, 'Do not derive policy from a volatile concrete implementation', [11, 32]);
+        }
+        return;
+      }
+      const name = superClass.type === 'Identifier' ? superClass.name :
+        superClass.type === 'MemberExpression' && superClass.object.type === 'Identifier' &&
+          superClass.property.type === 'Identifier' ? superClass.object.name : undefined;
+      if (name && isVolatile(config, name, imported.get(name))) {
+        report(context, superClass, 'Do not derive policy from a volatile concrete implementation', [11, 32]);
       }
     };
     return { ClassDeclaration: check, ClassExpression: check };

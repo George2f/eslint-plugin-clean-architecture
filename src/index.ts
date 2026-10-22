@@ -2,7 +2,7 @@ import type { ESLint, Rule as ESLintRule } from 'eslint';
 import packageJson from '../package.json';
 import type { Architecture, Docs, FlatConfig, Rule } from './types.js';
 import { defineArchitecture } from './utils/config.js';
-import { defaultArchitecture } from './utils/defaults.js';
+import { defaultArchitecture, frontendArchitecture, hasFrontendLayout } from './utils/defaults.js';
 import dependencyDirection from './rules/dependency-direction.js';
 import componentPublicApi from './rules/component-public-api.js';
 import noCoreInfrastructure from './rules/no-core-infrastructure.js';
@@ -85,6 +85,57 @@ export interface ConfigOptions {
   completeness?: boolean;
 }
 
+export interface FrontendConfigOptions {
+  strict?: boolean;
+  types?: boolean;
+  coverage?: 'warn' | 'off';
+}
+
+const frontendBaseRules: Record<string, 'error' | 'warn'> = {
+  'clean-architecture/dependency-direction': 'error',
+  'clean-architecture/no-production-test-dependency': 'error',
+  'clean-architecture/no-core-infrastructure': 'error',
+  'clean-architecture/no-composition-root-dependency': 'error',
+  'clean-architecture/no-volatile-concrete-dependency': 'error',
+  'clean-architecture/no-volatile-construction': 'error',
+  'clean-architecture/no-volatile-inheritance': 'error',
+};
+
+const frontendStrictRules: Record<string, 'error' | 'warn'> = {
+  'clean-architecture/no-view-data-formatting': 'warn',
+  'clean-architecture/no-subtype-rejection': 'warn',
+  'clean-architecture/prefer-polymorphic-dispatch': 'warn',
+};
+
+const frontendTypedRules: Record<string, 'error' | 'warn'> = {
+  'clean-architecture/no-concrete-method-override': 'warn',
+  'clean-architecture/prefer-segregated-interfaces': 'warn',
+};
+
+const warnedFrontendRoots = new Set<string>();
+
+export function createFrontendConfig(root: string, options: FrontendConfigOptions = {}): FlatConfig {
+  if (!options || typeof options !== 'object' ||
+    Object.keys(options).some(key => !['strict', 'types', 'coverage'].includes(key)) ||
+    ['strict', 'types'].some(key => key in options && typeof options[key as keyof FrontendConfigOptions] !== 'boolean') ||
+    (options.coverage !== undefined && !['warn', 'off'].includes(options.coverage))) {
+    throw new Error('clean-architecture: invalid createFrontendConfig options');
+  }
+  const architecture = defineArchitecture(frontendArchitecture(root, { strict: options.strict }));
+  if ((options.coverage ?? 'warn') === 'warn' && !hasFrontendLayout(root) && !warnedFrontendRoots.has(root)) {
+    warnedFrontendRoots.add(root);
+    console.warn('clean-architecture: no conventional frontend folders matched; frontend architecture rules are inactive. Configure frontend conventions with createFrontendConfig overrides.');
+  }
+  const strict = options.strict ?? false;
+  const types = options.types ?? false;
+  return {
+    name: `clean-architecture/frontend${strict ? '-strict' : ''}${types ? '-type-checked' : ''}`,
+    plugins: { 'clean-architecture': plugin },
+    settings: { 'clean-architecture': architecture },
+    rules: { ...frontendBaseRules, ...(strict ? frontendStrictRules : {}), ...(types ? frontendTypedRules : {}) },
+  };
+}
+
 function severity(rule: Rule, level: ConfigOptions['level']): 'error' | 'warn' {
   return rule.meta.docs.reliability === 'configured' || level === 'strictest' ? 'error' : 'warn';
 }
@@ -130,6 +181,16 @@ for (const level of ['recommended', 'strict', 'strictest'] as const) {
     // Resolve conventions against ESLint's cwd, not where this module was imported.
     delete config.settings;
     plugin.configs[name] = config;
+  }
+}
+
+for (const strict of [false, true]) {
+  for (const types of [false, true]) {
+    const name = `frontend${strict ? '-strict' : ''}${types ? '-type-checked' : ''}`;
+    Object.defineProperty(plugin.configs, name, {
+      enumerable: true,
+      get: () => createFrontendConfig(process.cwd(), { strict, types }),
+    });
   }
 }
 

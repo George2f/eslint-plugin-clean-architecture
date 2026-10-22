@@ -10,6 +10,7 @@ Every rule maps to book chapters and principles in its metadata, so a lint repor
 points back to the architectural idea it checks.
 
 - 31 rules: dependency boundaries, components, SOLID signals, contracts, and immutability.
+- Generic frontend profiles for React/Vite/Next-style `pages`/`components`/`hooks`/`services` layouts.
 - All 34 chapters mapped, including documented limits and non-detectable guidance.
 - ESLint 8.57, 9 and 10 flat config; JavaScript and TypeScript; dual ESM/CJS build.
 
@@ -103,22 +104,75 @@ discover source files under `src/`.
 On ESLint 8, TypeScript projects additionally need `@types/eslint`, because ESLint
 8 does not ship its own type declarations.
 
+### Frontend profiles
+
+For a generic React/Vite/Next-style layout, use a frontend preset instead of
+describing backend layers:
+
+```js
+import cleanArchitecture from '@george2f/eslint-plugin-clean-architecture';
+
+export default [
+  cleanArchitecture.configs.frontend,              // loose, AST-only
+  // cleanArchitecture.configs['frontend-strict'], // pages -> hooks -> services
+  // cleanArchitecture.configs['frontend-type-checked'],
+  // cleanArchitecture.configs['frontend-strict-type-checked'],
+];
+```
+
+Default frontend meaning:
+
+| Layer | Conventional folders |
+| --- | --- |
+| presentation | `src/pages`, `src/app/**/*.{jsx,tsx}`, `src/components`, `src/views`, `src/screens`, `src/layouts` |
+| application | `src/hooks`, `src/use-cases`, `src/application`, `src/app/**/action.*` |
+| adapters | `src/services`, `src/api`, `src/clients`, `src/lib/api`, `src/lib/http`, `src/app/**/route.*` |
+| domain | `src/domain`, `src/entities`, `src/models` |
+| composition | `src/main.*`, `src/index.*`, `src/bootstrap.*` |
+
+Loose mode allows presentation to call adapters (`pages` → `services`) directly.
+Strict mode requires presentation to go through application (`pages` → `hooks` →
+`services`). Both always forbid adapters importing presentation/application, and
+application importing presentation. Hooks are treated as application; override
+this if your hooks are presentational. `features/**` is not classified by default.
+
+If no conventional frontend folders exist, `createFrontendConfig` warns instead
+of silently reporting zero findings. Use `createFrontendConfig(root, { strict,
+types })` when the layout or direction differs. For JS-only projects, the plain
+frontend presets require no TypeScript parser or type information. JSX files
+still need a JSX-capable parser supplied by your ESLint config.
+
+### JavaScript
+
+JavaScript gets every AST rule, including `no-volatile-construction`,
+`no-volatile-inheritance`, `port-ownership`, `no-subtype-rejection`, and
+`prefer-polymorphic-dispatch` through literal-import and local-class analysis.
+TypeScript improves precision for DIP/ports and validates exported contracts.
+Contract/interface rules (`no-outer-types-in-contracts`, `no-entity-boundary-data`,
+`boundary-model-dependencies`, `prefer-segregated-interfaces`,
+`no-concrete-method-override`, `no-behavior-in-boundary-models`) remain
+TypeScript-only because JavaScript has no reliable type shape to analyze.
+
 ## Presets and applicability
 
 | Config | Enabled rules | Severity |
 | --- | --- | --- |
-| `recommended` | 11 AST policies | Errors |
-| `strict` | 13 AST checks | Policy errors, heuristic warnings |
-| `strictest` | 13 AST checks | All errors |
+| `recommended` | 12 AST policies | Errors |
+| `strict` | 16 AST checks | Policy errors, heuristic warnings |
+| `strictest` | 16 AST checks | All errors |
 | `recommended-type-checked` | 18 policies, including typed and project checks | Errors |
 | `strict-type-checked` | 28 checks, including heuristics and metrics | Policy errors, other warnings |
 | `strictest-type-checked` | 28 checks | All errors |
+| `frontend` | 7 loose AST policies | Errors |
+| `frontend-strict` | 10 strict AST checks | Policy errors, heuristic warnings |
+| `frontend-type-checked` | 9 loose checks, including typed heuristics | Policy errors, heuristic warnings |
+| `frontend-strict-type-checked` | 12 strict checks, including typed heuristics | Policy errors, heuristic warnings |
 
-The three volatility-specific rules require **explicit volatile targets** and are
-available through custom configuration. Actors and independent use-case labels
-are also explicit, never guessed. Immutable checks apply only to conventional
-`pure`/`immutable` files or directories; contract checks only to designated model
-paths. Unmatched paths are not silently treated as core.
+The generic backend presets require **explicit volatile targets**; frontend
+profiles classify adapter folders as volatile. Actors and independent use-case
+labels are always explicit, never guessed. Immutable checks apply only to
+conventional `pure`/`immutable` files or directories; contract checks only to
+designated model paths. Unmatched paths are not silently treated as core.
 
 `createConfig(architecture, options)` remains available for custom layouts, actor
 labels, volatility, and selectively enabling all 31 rules. See
@@ -152,9 +206,9 @@ and [chapter-by-chapter coverage/research decisions](docs/coverage.md).
 | [`no-dynamic-boundary-dependencies`](docs/rules.md#no-dynamic-boundary-dependencies) | 18, 22 | Policy | AST |
 | [`no-unresolved-boundary-dependencies`](docs/rules.md#no-unresolved-boundary-dependencies) | 18, 22 | Policy | AST |
 | [`no-component-cycles`](docs/rules.md#no-component-cycles) | 14 | Policy | Project |
-| [`no-volatile-construction`](docs/rules.md#no-volatile-construction) | 11, 26 | Policy | Types |
-| [`no-volatile-inheritance`](docs/rules.md#no-volatile-inheritance) | 11, 32 | Policy | Types |
-| [`port-ownership`](docs/rules.md#port-ownership) | 11, 22 | Policy | Types |
+| [`no-volatile-construction`](docs/rules.md#no-volatile-construction) | 11, 26 | Policy | AST + types |
+| [`no-volatile-inheritance`](docs/rules.md#no-volatile-inheritance) | 11, 32 | Policy | AST + types |
+| [`port-ownership`](docs/rules.md#port-ownership) | 11, 22 | Policy | AST + types |
 | [`no-outer-types-in-contracts`](docs/rules.md#no-outer-types-in-contracts) | 20, 22 | Policy | Types |
 | [`no-entity-boundary-data`](docs/rules.md#no-entity-boundary-data) | 20, 22 | Policy | Types |
 | [`boundary-model-dependencies`](docs/rules.md#boundary-model-dependencies) | 20, 22, 30, 31 | Policy | Types |
@@ -164,8 +218,8 @@ and [chapter-by-chapter coverage/research decisions](docs/coverage.md).
 | [`no-mixed-actor-dependencies`](docs/rules.md#no-mixed-actor-dependencies) | 7, 13 | Heuristic | AST |
 | [`no-view-data-formatting`](docs/rules.md#no-view-data-formatting) | 23 | Heuristic | AST |
 | [`prefer-segregated-interfaces`](docs/rules.md#prefer-segregated-interfaces) | 10, 13 | Heuristic | Types |
-| [`no-subtype-rejection`](docs/rules.md#no-subtype-rejection) | 9 | Heuristic | Types |
-| [`prefer-polymorphic-dispatch`](docs/rules.md#prefer-polymorphic-dispatch) | 5, 8, 9 | Heuristic | Types |
+| [`no-subtype-rejection`](docs/rules.md#no-subtype-rejection) | 9 | Heuristic | AST |
+| [`prefer-polymorphic-dispatch`](docs/rules.md#prefer-polymorphic-dispatch) | 5, 8, 9 | Heuristic | AST |
 | [`no-behavior-in-boundary-models`](docs/rules.md#no-behavior-in-boundary-models) | 20, 22 | Heuristic | Types |
 | [`stable-dependencies`](docs/rules.md#stable-dependencies) | 14 | Metric | Project |
 | [`stable-abstractions`](docs/rules.md#stable-abstractions) | 14 | Metric | Project |
@@ -198,6 +252,8 @@ can change runtime behavior; diagnostics explain the violated boundary instead.
 
 ## Limits
 
+- Preset strictness controls severity, not coverage. Rules without matching
+  scopes/files remain dormant. Use frontend profiles or explicit mappings.
 - Project graph rules require full-scope lint with **ESLint result cache disabled**.
   An unchanged importer can acquire a violation when a dependency changes.
 - Graph snapshots include source contents, resolution metadata, current unsaved

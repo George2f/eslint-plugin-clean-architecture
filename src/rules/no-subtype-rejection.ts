@@ -1,25 +1,60 @@
+import type { TSESTree } from '@typescript-eslint/utils';
 import { createRule, report } from '../utils/create-rule.js';
-import { containingClass, typeServices } from '../utils/types.js';
+import { hasTypeServices, containingClass, typeServices } from '../utils/types.js';
 
 export default createRule({
   name: 'no-subtype-rejection', description: 'Review inherited operations implemented only by throwing',
-  chapters: [9], principle: 'Liskov Substitution', analysis: 'types', reliability: 'heuristic',
-  limitations: 'An always-throwing implementation may satisfy its contract. Reports only inherited/interface operations; cannot establish behavioral substitutability or pre/postconditions.',
+  chapters: [9], principle: 'Liskov Substitution', analysis: 'ast', reliability: 'heuristic',
+  limitations: 'Reports inherited methods implemented only by throwing. JavaScript analysis only sees a base class declared in the same file; imported bases require TypeScript analysis. An always-throwing implementation may satisfy its contract.',
   create(context) {
-    const { checker, toTS } = typeServices(context);
-    return { MethodDefinition(node) {
-      if (node.kind !== 'method' || node.static || node.computed || node.key.type !== 'Identifier' ||
-        node.value.body?.body.length !== 1 || node.value.body.body[0]?.type !== 'ThrowStatement') return;
-      const owner = containingClass(toTS.get(node).parent);
-      if (!owner) return;
-      for (const clause of owner.heritageClauses ?? []) {
-        for (const heritage of clause.types) {
-          if (checker.getPropertyOfType(checker.getTypeAtLocation(heritage), node.key.name)) {
-            report(context, node, `Inherited operation ${node.key.name} always throws; verify substitutability contract`, [9]);
-            return;
+    if (hasTypeServices(context)) {
+      const { checker, toTS } = typeServices(context);
+      return { MethodDefinition(node) {
+        if (node.kind !== 'method' || node.static || node.computed || node.key.type !== 'Identifier' ||
+          node.value.body?.body.length !== 1 || node.value.body.body[0]?.type !== 'ThrowStatement') return;
+        const owner = containingClass(toTS.get(node).parent);
+        if (!owner) return;
+        for (const clause of owner.heritageClauses ?? []) {
+          for (const heritage of clause.types) {
+            if (checker.getPropertyOfType(checker.getTypeAtLocation(heritage), node.key.name)) {
+              report(context, node, `Inherited operation ${node.key.name} always throws; verify substitutability contract`, [9]);
+              return;
+            }
           }
         }
-      }
-    } };
+      } };
+    }
+    const classes = new Map<string, TSESTree.ClassDeclaration>();
+    const interfaces = new Map<string, Set<string>>();
+    return {
+      ClassDeclaration(node) {
+        if (node.id) classes.set(node.id.name, node);
+      },
+      TSInterfaceDeclaration(node) {
+        const methods = new Set<string>();
+        for (const member of node.body.body) {
+          if (member.type === 'TSMethodSignature' && member.key.type === 'Identifier') methods.add(member.key.name);
+        }
+        interfaces.set(node.id.name, methods);
+      },
+      'Program:exit'() {
+        for (const derived of classes.values()) {
+          const base = derived.superClass?.type === 'Identifier' ? classes.get(derived.superClass.name) : undefined;
+          const implemented = new Set(derived.implements?.flatMap(clause => clause.expression.type === 'Identifier'
+            ? [...(interfaces.get(clause.expression.name) ?? [])] : []) ?? []);
+          if (!base && !implemented.size) continue;
+          for (const member of derived.body.body) {
+            if (member.type !== 'MethodDefinition' || member.kind !== 'method' || member.static || member.computed ||
+              member.key.type !== 'Identifier' || member.value.body?.body.length !== 1 ||
+              member.value.body.body[0]?.type !== 'ThrowStatement') continue;
+            const methodName = member.key.name;
+            const inherited = implemented.has(methodName) || Boolean(base?.body.body.some(candidate => candidate.type === 'MethodDefinition' &&
+              candidate.kind === 'method' && !candidate.static && !candidate.computed &&
+              candidate.key.type === 'Identifier' && candidate.key.name === methodName && candidate.value.body));
+            if (inherited) report(context, member, `Inherited operation ${methodName} always throws; verify substitutability contract`, [9]);
+          }
+        }
+      },
+    };
   },
 });
