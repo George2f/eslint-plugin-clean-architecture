@@ -11,13 +11,18 @@ classification; it does not prove an entire architectural principle. Several
 chapters share a detector. No chapter is counted as fully enforced just because
 it has a matching rule.
 
+Frontend profiles add frontend folder conventions without changing the book
+mapping. JavaScript executes all AST detectors; five formerly typed detectors now
+also have literal-import/local-class AST paths. Contract and interface-shape
+detectors remain TypeScript-only.
+
 | Chapter / section | Detectable application | Status and limits |
 | --- | --- | --- |
 | 1. What Is Design and Architecture? / The Goal | Boundary protection supports future change | Context only: maintenance cost needs historical/business evidence |
 | 2. A Tale of Two Values / Architecture | Enforce declared structure alongside behavior | Context only: priorities and business value cannot be inferred |
 | 3. Paradigm Overview | Dependency inversion and immutable scopes | Covered through Ch. 5/6 detectors; no mandatory paradigm |
 | 4. Structured Programming / Functional Decomposition, Tests | Existing language/lint checks and behavioral tests | No additional detector: JS has structured flow; architecture plugin cannot prove correctness |
-| 5. Object-Oriented Programming / Polymorphism | `prefer-polymorphic-dispatch`, dependency direction and typed DIP checks | Partial: repeated proper-subtype tests are a heuristic |
+| 5. Object-Oriented Programming / Polymorphism | `prefer-polymorphic-dispatch`, dependency direction and DIP checks | Partial: repeated subtype checks are a syntax-level heuristic |
 | 6. Functional Programming / Segregation of Mutability | `no-mutation-in-immutable-modules`, `no-mutable-module-state` | Configured scopes; not a proof of purity, alias freedom, or concurrency safety |
 | 7. SRP / Actors, Solutions | `no-mixed-actor-dependencies` | Heuristic: actors explicitly declared; orchestration may legitimately depend on several |
 | 8. OCP / Directional Control, Information Hiding | `dependency-direction`, `component-public-api`, `prefer-polymorphic-dispatch` | Partial: protects chosen extension boundaries, cannot predict future changes |

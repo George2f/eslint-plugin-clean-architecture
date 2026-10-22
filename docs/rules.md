@@ -124,17 +124,19 @@ scope required so that reporting file participates. Isolated components skipped.
 
 ## no-volatile-construction
 
-Ch. 11/26; configured, typed. Requires `core`, `volatile`.
+Ch. 11/26; configured, AST with optional types. Requires `core`, `volatile`.
 Valid: constructing a stable value object. Invalid: `new Adapter()` in core when
-resolved Adapter declaration is volatile, including aliased imports. Factory
-results and opaque runtime injection are not reconstructed.
+the imported module is volatile. JavaScript resolves literal default/named imports;
+TypeScript also follows aliases and resolved declarations. Factory results and
+opaque runtime injection are not reconstructed.
 
 ## no-volatile-inheritance
 
-Ch. 11/32; configured, typed. Requires `core`, `volatile`.
+Ch. 11/32; configured, AST with optional types. Requires `core`, `volatile`.
 Valid: protected class extends a stable permitted base. Invalid: extends a
-declared volatile concrete implementation. Uses actual resolved declarations;
-does not assume every abstract or framework base is volatile.
+declared volatile concrete implementation. JavaScript resolves literal imported
+bases; TypeScript uses actual resolved declarations. Does not assume every
+abstract or framework base is volatile.
 
 ## no-concrete-method-override
 
@@ -145,11 +147,11 @@ Framework hooks and intentional template methods are legitimate exceptions.
 
 ## port-ownership
 
-Ch. 11/22; configured, typed. Requires `core`, `roles`.
+Ch. 11/22; configured, AST with optional types. Requires `core`, `roles`.
 Valid: policy uses port owned by its own or permitted inner layer. Invalid:
-policy references designated port interface/type alias owned by forbidden outer
-layer. Without layer classification, port must be in core. Interface members are
-not reported again as separate ports. No names-based interface guessing.
+policy imports a designated port owned by a forbidden outer layer. JavaScript
+checks literal imports; TypeScript also follows aliases and type declarations.
+Without layer classification, the port must be in core. No names-based guessing.
 
 ## no-outer-types-in-contracts
 
@@ -215,18 +217,20 @@ Structural TS semantics differ from Java.
 
 ## no-subtype-rejection
 
-Ch. 9; heuristic, typed. No scope beyond `root`.
+Ch. 9; heuristic, AST with optional types. No scope beyond `root`.
 Valid: implementing operation or throwing in unrelated method. Warn: inherited
-or interface operation consists solely of a throw. This may satisfy its actual
-contract, so warning asks for review rather than asserting an LSP violation.
+or interface operation consists solely of a throw. JavaScript sees local base
+classes; TypeScript also sees same-file interfaces and imported/inherited types.
+An always-throwing implementation may satisfy its contract, so this asks for
+review rather than asserting an LSP violation.
 
 ## prefer-polymorphic-dispatch
 
-Ch. 5/8/9; heuristic, typed. No scope beyond `root`.
-Valid: call `shape.area()`. Warn: same function checks same abstraction against
-multiple distinct proper subtypes with instanceof. Uses assignability to reject
-unrelated types; excludes Error handling and any/unknown/union left operands.
-Does not prove OCP/LSP or ban every instanceof/switch.
+Ch. 5/8/9; heuristic, AST. No scope beyond `root`.
+Valid: call `shape.area()`. Warn: same function checks the same identifier against
+multiple distinct constructors with instanceof. Ignores built-in error dispatch.
+Does not prove OCP/LSP or ban every instanceof/switch. JavaScript and TypeScript
+use the same syntax-level heuristic.
 
 ## no-behavior-in-boundary-models
 

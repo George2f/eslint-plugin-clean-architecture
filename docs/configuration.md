@@ -46,10 +46,51 @@ Corresponding adapter subdirectories also classify infrastructure.
 See [exact patterns](https://github.com/George2f/eslint-plugin-clean-architecture/blob/main/src/utils/defaults.ts).
 
 The root is ESLint's `cwd`, not the plugin import directory. A root tsconfig is
-used when present; otherwise graph roots are source files under `src/`. Actors,
-independent use-case labels, and volatile targets are never inferred. Add explicit
-configuration for those checks. Unrecognized layouts are not protected by an
+used when present; otherwise graph roots are source files under `src/`. Actors
+and independent use-case labels are never inferred. Generic backend presets also
+leave volatile targets explicit. Unrecognized layouts are not protected by an
 imaginary mapping; use the helper below.
+
+## Frontend profiles
+
+`plugin.configs.frontend`, `frontend-strict`, `frontend-type-checked`, and
+`frontend-strict-type-checked` use frontend conventions and work without settings:
+
+| Purpose | Frontend paths under `src/` |
+| --- | --- |
+| Presentation | `pages/**`, `app/**/*.jsx`, `app/**/*.tsx`, `components/**`, `views/**`, `screens/**`, `layouts/**` |
+| Application | `hooks/**`, `use-cases/**`, `application/**`, `app/**/action.*` |
+| Adapters | `services/**`, `api/**`, `clients/**`, `lib/api/**`, `lib/http/**`, `app/**/route.*` |
+| Domain | `domain/**`, `entities/**`, `models/**` |
+| Composition | `main.*`, `index.*`, `bootstrap.*` |
+| Tests | `*.test.*`, `*.spec.*`, `test/tests/__tests__`, `cypress/**`, `e2e/**` |
+
+Next.js `app/**/route.*` handlers are adapters and `app/**/action.*` are
+application, so they are not mistaken for page presentation.
+
+Loose frontend layers:
+
+- domain → nothing
+- application → domain, adapters
+- adapters → domain
+- presentation → domain, application, adapters
+- composition → all
+
+Strict frontend layers remove presentation → adapters. Hooks are application and
+services/api are adapters. `features/**` is intentionally unclassified; map it
+explicitly if you use feature slices. Adapter folders are volatile; domain-only
+`core` keeps React/Vue imports from being treated as core policy.
+
+For custom frontend direction, call:
+
+```js
+createFrontendConfig(root, { strict: true, types: true, coverage: 'warn' })
+```
+
+The plain `frontend` presets need no TypeScript parser. JSX still needs a
+JSX-capable parser supplied by your ESLint config. If no conventional frontend
+folders exist, `createFrontendConfig` emits one warning instead of silently
+running with dormant rules. `coverage: 'off'` suppresses that warning.
 
 ## Custom architecture
 

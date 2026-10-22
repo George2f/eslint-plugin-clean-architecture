@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22
+
+### Added
+
+- Generic frontend profiles: `frontend`, `frontend-strict`,
+  `frontend-type-checked`, and `frontend-strict-type-checked`.
+- `createFrontendConfig()` for React/Vite/Next-style pages, components, hooks,
+  services, API, domain, and composition folders.
+- Frontend coverage warning when no conventional frontend folders match.
+- JavaScript AST paths for volatile construction/inheritance, port ownership,
+  subtype rejection, and polymorphic dispatch.
+
+### Changed
+
+- Frontend presets classify hooks as application, services/API as adapters, and
+  adapter folders as volatile; domain is the protected core.
+- `frontend` is loose (pages may call services); `frontend-strict` requires
+  pages/components to go through hooks/application before services.
+- Backend presets retain their existing conventional layout and explicit
+  volatility/actor requirements.
+- `port-ownership`, volatile construction/inheritance, subtype rejection, and
+  polymorphic dispatch now run without TypeScript type services.
+- Preset counts grow with the newly JS-capable policies/heuristics.
+
 ## [0.1.1] - 2026-10-22
 
 ### Added

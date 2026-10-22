@@ -2,6 +2,11 @@ import ts from 'typescript';
 import type { TSESTree } from '@typescript-eslint/utils';
 import type { Context } from '../types.js';
 
+export function hasTypeServices(context: Context): boolean {
+  const services = context.sourceCode.parserServices;
+  return Boolean(services?.program && services.esTreeNodeToTSNodeMap);
+}
+
 export function typeServices(context: Context) {
   const services = context.sourceCode.parserServices;
   if (!services?.program || !services.esTreeNodeToTSNodeMap || !services.tsNodeToESTreeNodeMap) {

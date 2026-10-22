@@ -8,6 +8,7 @@ if (!source.includes(marker)) {
   writeFileSync(file, `${source}
 module.exports = Object.assign(module.exports.default, {
   createConfig: module.exports.createConfig,
+  createFrontendConfig: module.exports.createFrontendConfig,
   defineArchitecture: module.exports.defineArchitecture,
   rules: module.exports.rules,
   default: module.exports.default,

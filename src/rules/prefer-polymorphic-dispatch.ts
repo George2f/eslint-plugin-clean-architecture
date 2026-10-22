@@ -1,33 +1,36 @@
-import ts from 'typescript';
-import type { TSESTree } from '@typescript-eslint/utils';
 import { createRule, report } from '../utils/create-rule.js';
-import { typeServices } from '../utils/types.js';
+import type { TSESTree } from '@typescript-eslint/utils';
+
+const builtinErrors = new Set(['Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError', 'EvalError', 'URIError', 'AggregateError']);
+
+function constructorName(node: TSESTree.Node): string | undefined {
+  if (node.type === 'Identifier') return node.name;
+  if (node.type === 'MemberExpression' && node.property.type === 'Identifier') return node.property.name;
+  return undefined;
+}
 
 export default createRule({
-  name: 'prefer-polymorphic-dispatch', description: 'Review repeated subtype dispatch on the same abstraction',
-  chapters: [5, 8, 9], principle: 'Open–Closed and substitution', analysis: 'types', reliability: 'heuristic',
-  limitations: 'Only repeated instanceof checks of distinct proper subtypes on the same symbol in one function. Does not ban switches or prove OCP/LSP violations. Error handling excluded.',
+  name: 'prefer-polymorphic-dispatch', description: 'Review repeated subtype dispatch on the same value',
+  chapters: [5, 8, 9], principle: 'Open–Closed and substitution', analysis: 'ast', reliability: 'heuristic',
+  limitations: 'Detects two or more instanceof checks against the same identifier in one function. Does not prove OCP/LSP or ban every instanceof/switch. Built-in error dispatch is ignored.',
   create(context) {
-    const { checker, toTS } = typeServices(context);
-    const functions = new Map<TSESTree.Node, Map<ts.Symbol, Set<ts.Type>>>();
+    const functions = new Map<TSESTree.Node, Map<string, Set<string>>>();
     return { BinaryExpression(node) {
       if (node.operator !== 'instanceof' || node.left.type !== 'Identifier') return;
+      const subtype = constructorName(node.right);
+      if (!subtype || builtinErrors.has(subtype)) return;
       let owner: TSESTree.Node | undefined = node.parent;
       while (owner && !['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(owner.type)) owner = owner.parent;
       if (!owner) return;
-      const left = toTS.get(node.left), symbol = checker.getSymbolAtLocation(left), type = checker.getTypeAtLocation(left);
-      const constructor = checker.getTypeAtLocation(toTS.get(node.right));
-      const signature = constructor.getConstructSignatures()[0];
-      if (!symbol || !signature || type.isUnionOrIntersection() || type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return;
-      const subtype = checker.getReturnTypeOfSignature(signature);
-      if (type.getSymbol()?.name === 'Error' || !checker.isTypeAssignableTo(subtype, type) || checker.isTypeAssignableTo(type, subtype)) return;
       let group = functions.get(owner);
       if (!group) { group = new Map(); functions.set(owner, group); }
-      let seen = group.get(symbol);
-      if (!seen) { seen = new Set(); group.set(symbol, seen); }
+      let seen = group.get(node.left.name);
+      if (!seen) { seen = new Set(); group.set(node.left.name, seen); }
       const previous = seen.size;
       seen.add(subtype);
-      if (previous === 1 && seen.size === 2) report(context, node, 'Repeated subtype dispatch may make extensions modify this consumer; consider polymorphism', [5, 8, 9]);
+      if (previous === 1 && seen.size === 2) {
+        report(context, node, 'Repeated subtype dispatch may make extensions modify this consumer; consider polymorphism', [5, 8, 9]);
+      }
     } };
   },
 });

@@ -1,11 +1,15 @@
 import fs from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
 import type { Linter } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
-import plugin, { createConfig, defineArchitecture, rules } from '../src/index.js';
+import plugin, { createConfig, createFrontendConfig, defineArchitecture, rules } from '../src/index.js';
 import type { Architecture, Context } from '../src/types.js';
 import { architecture, file, root } from './architecture.js';
-import { matches, targetMatches } from '../src/utils/config.js';
+import { layerOf, matches, targetMatches } from '../src/utils/config.js';
+import { frontendArchitecture } from '../src/utils/defaults.js';
 import { project, lintProject } from './project-cases.js';
 import { projectGraph } from '../src/utils/project.js';
 import { createESLint, createLinter } from './eslint-compat.js';
@@ -15,6 +19,15 @@ function verify(name: string, code: string, config: Architecture = architecture)
     files: ['**/*.ts'], languageOptions: { parser }, plugins: { 'clean-architecture': plugin },
     settings: { 'clean-architecture': config }, rules: { [`clean-architecture/${name}`]: 'error' },
   }], { filename: file('application/source.ts') });
+}
+
+const frontendRoot = fileURLToPath(new URL('./fixtures/frontend', import.meta.url));
+function lintFrontend(config: ReturnType<typeof createFrontendConfig>, name: string) {
+  return createLinter({ cwd: frontendRoot }).verify(
+    fs.readFileSync(path.join(frontendRoot, name), 'utf8'),
+    [{ files: ['**/*.js'], ...config }],
+    { filename: path.join(frontendRoot, name) },
+  );
 }
 
 describe('catalog and presets', () => {
@@ -50,7 +63,7 @@ describe('catalog and presets', () => {
     expect(JSON.stringify(config)).toBe(before);
   });
   it('provides useful zero-config presets and separates typed prerequisites', () => {
-    for (const [name, count] of [['recommended', 11], ['strict', 13], ['strictest', 13],
+    for (const [name, count] of [['recommended', 12], ['strict', 16], ['strictest', 16],
       ['recommended-type-checked', 18], ['strict-type-checked', 28], ['strictest-type-checked', 28]] as const) {
       const preset = plugin.configs[name] as Linter.Config;
       expect(Object.keys(preset.rules ?? {})).toHaveLength(count);
@@ -61,6 +74,57 @@ describe('catalog and presets', () => {
         if (name.startsWith('recommended')) expect(docs?.reliability).toBe('configured');
         if (name.startsWith('strictest')) expect(value).toBe('error');
       }
+    }
+    for (const [name, count] of [['frontend', 7], ['frontend-type-checked', 9],
+      ['frontend-strict', 10], ['frontend-strict-type-checked', 12]] as const) {
+      const preset = plugin.configs[name] as Linter.Config;
+      expect(Object.keys(preset.rules ?? {})).toHaveLength(count);
+      expect(preset.settings?.['clean-architecture']).toBeDefined();
+    }
+  });
+});
+
+describe('frontend profile', () => {
+  it('allows pages to call services in loose mode and flags it in strict mode', () => {
+    const loose = lintFrontend(createFrontendConfig(frontendRoot, { coverage: 'off' }), 'src/pages/Users.js');
+    const strict = lintFrontend(createFrontendConfig(frontendRoot, { strict: true, coverage: 'off' }), 'src/pages/Users.js');
+    expect(loose).toEqual([]);
+    expect(strict).toEqual([expect.objectContaining({ ruleId: 'clean-architecture/dependency-direction' })]);
+  });
+  it('always flags adapters importing presentation', () => {
+    const messages = lintFrontend(createFrontendConfig(frontendRoot, { coverage: 'off' }), 'src/services/bad.js');
+    expect(messages).toEqual([expect.objectContaining({
+      ruleId: 'clean-architecture/dependency-direction',
+      message: expect.stringContaining('adapters may not depend on presentation'),
+    })]);
+  });
+  it('runs volatile construction checks in JavaScript without type services', () => {
+    const messages = lintFrontend(createFrontendConfig(frontendRoot, { coverage: 'off' }), 'src/domain/policy.js');
+    expect(messages.map(message => message.ruleId)).toContain('clean-architecture/no-volatile-construction');
+  });
+  it('runs subtype heuristics in JavaScript with the strict profile', () => {
+    const config = createFrontendConfig(frontendRoot, { strict: true, coverage: 'off' });
+    expect(lintFrontend(config, 'src/domain/subtype.js').map(message => message.ruleId))
+      .toContain('clean-architecture/no-subtype-rejection');
+    expect(lintFrontend(config, 'src/domain/dispatch.js').map(message => message.ruleId))
+      .toContain('clean-architecture/prefer-polymorphic-dispatch');
+  });
+  it('classifies Next app routes/actions separately from pages', () => {
+    const config = frontendArchitecture(frontendRoot);
+    expect(layerOf(config, path.join(frontendRoot, 'src/app/users/page.jsx'))?.name).toBe('presentation');
+    expect(layerOf(config, path.join(frontendRoot, 'src/app/users/route.js'))?.name).toBe('adapters');
+    expect(layerOf(config, path.join(frontendRoot, 'src/app/users/action.js'))?.name).toBe('application');
+  });
+  it('warns when no conventional frontend layout is present', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clean-architecture-'));
+    fs.mkdirSync(path.join(root, 'src', 'utils'), { recursive: true });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      createFrontendConfig(root);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no conventional frontend folders'));
+    } finally {
+      warn.mockRestore();
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 });
