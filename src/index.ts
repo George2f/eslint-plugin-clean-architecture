@@ -137,13 +137,21 @@ function frontendRules(options: FrontendConfigOptions): Record<string, 'error' |
   return rules;
 }
 
+const frontendOptionKeys = new Set(['strict', 'types', 'coverage', 'severity', 'heuristics']);
+
+function validFrontendOptions(options: FrontendConfigOptions): boolean {
+  const { strict, types, coverage, severity, heuristics } = options;
+  const validBoolean = (value: unknown): boolean => value === undefined || typeof value === 'boolean';
+  const validOneOf = (value: string | undefined, allowed: readonly string[]): boolean => value === undefined || allowed.includes(value);
+  return Object.keys(options).every(key => frontendOptionKeys.has(key)) &&
+    validBoolean(strict) && validBoolean(types) &&
+    validOneOf(coverage, ['warn', 'off']) &&
+    validOneOf(severity, ['error', 'warn']) &&
+    validOneOf(heuristics, ['off', 'warn', 'error']);
+}
+
 export function createFrontendConfig(root: string, options: FrontendConfigOptions = {}): FlatConfig {
-  if (!options || typeof options !== 'object' ||
-    Object.keys(options).some(key => !['strict', 'types', 'coverage', 'severity', 'heuristics'].includes(key)) ||
-    ['strict', 'types'].some(key => key in options && typeof options[key as keyof FrontendConfigOptions] !== 'boolean') ||
-    (options.coverage !== undefined && !['warn', 'off'].includes(options.coverage)) ||
-    (options.severity !== undefined && !['error', 'warn'].includes(options.severity)) ||
-    (options.heuristics !== undefined && !['off', 'warn', 'error'].includes(options.heuristics))) {
+  if (!options || typeof options !== 'object' || !validFrontendOptions(options)) {
     throw new Error('clean-architecture: invalid createFrontendConfig options');
   }
   const architecture = defineArchitecture(frontendArchitecture(root, { strict: options.strict }));
@@ -196,11 +204,19 @@ function severity(rule: Rule, level: ConfigOptions['level']): 'error' | 'warn' {
   return rule.meta.docs.reliability === 'configured' || level === 'strictest' ? 'error' : 'warn';
 }
 
+const configOptionKeys = new Set(['level', 'types', 'project', 'completeness']);
+
+function validConfigOptions(options: ConfigOptions): boolean {
+  const { level, types, project, completeness } = options;
+  const validBoolean = (value: unknown): boolean => value === undefined || typeof value === 'boolean';
+  return Object.keys(options).every(key => configOptionKeys.has(key)) &&
+    (level === undefined || ['recommended', 'strict', 'strictest'].includes(level)) &&
+    validBoolean(types) && validBoolean(project) && validBoolean(completeness);
+}
+
 export function createConfig(architecture: Architecture, options: ConfigOptions = {}): FlatConfig {
   defineArchitecture(architecture);
-  if (Object.keys(options).some(key => !['level', 'types', 'project', 'completeness'].includes(key)) ||
-    (options.level !== undefined && !['recommended', 'strict', 'strictest'].includes(options.level)) ||
-    ['types', 'project', 'completeness'].some(key => key in options && typeof options[key as keyof ConfigOptions] !== 'boolean')) {
+  if (!validConfigOptions(options)) {
     throw new Error('clean-architecture: invalid createConfig options');
   }
   if (options.project && !architecture.project) throw new Error('clean-architecture: project checks require architecture.project');

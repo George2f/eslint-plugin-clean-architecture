@@ -1,5 +1,5 @@
 import { createRule, report } from '../utils/create-rule.js';
-import { architecture, inCore, isVolatile } from '../utils/config.js';
+import { architectureOf, inCore, isVolatile } from '../utils/config.js';
 import { resolveDependency } from '../utils/dependencies.js';
 import { declarationsOf, hasTypeServices } from '../utils/types.js';
 import type { Architecture, Context } from '../types.js';
@@ -19,19 +19,23 @@ export default createRule({
   chapters: [11, 26], principle: 'Dependency Inversion and factories', analysis: 'ast', scopes: ['core', 'volatile'],
   limitations: 'Tracks literal default, named, and namespace imports. Aliases and dynamic requires are not reconstructed. TypeScript analysis is used when available; otherwise the imported module is classified directly.',
   create(context) {
-    const config = architecture(context);
+    const config = architectureOf(context);
     if (!inCore(config, context.physicalFilename)) return {};
     const imported = importTargets(context, config);
     const typed = hasTypeServices(context);
     return { NewExpression(node) {
       if (typed) {
-        const bad = declarationsOf(context, node.callee).find(declaration => isVolatile(config, '', declaration.getSourceFile().fileName));
+        const bad = declarationsOf(context, node.callee).find(declaration => {
+          const file = declaration.getSourceFile();
+          return isVolatile(config, '', file.fileName);
+        });
         if (bad) report(context, node, 'Construct volatile implementation in Main/factory, not protected policy', [11, 26]);
         return;
       }
-      const name = node.callee.type === 'Identifier' ? node.callee.name :
-        node.callee.type === 'MemberExpression' && node.callee.object.type === 'Identifier' &&
-          node.callee.property.type === 'Identifier' ? node.callee.object.name : undefined;
+      let name;
+      if (node.callee.type === 'Identifier') name = node.callee.name;
+      else if (node.callee.type === 'MemberExpression' && node.callee.object.type === 'Identifier' &&
+        node.callee.property.type === 'Identifier') name = node.callee.object.name;
       if (name && isVolatile(config, name, imported.get(name))) {
         report(context, node, 'Construct volatile implementation in Main/factory, not protected policy', [11, 26]);
       }

@@ -12,6 +12,7 @@
 - Never infer actors or volatility from names. Never promise purity, LSP, or business-design correctness.
 - No architectural autofixes. Do not include ebook text or local ebook paths in artifacts.
 - `npm test`, `npm run lint`, `npm run verify:dist`, `npm run example`, `npm pack --dry-run`, and `npx publint` are completion checks.
+- `npm run lint` includes clean-code strictest; repo-specific rule options/file exceptions live in `eslint.config.mjs` and need a why-comment.
 - Tests must stay compatible with ESLint 8.57, 9, and 10; use `tests/eslint-compat.ts` for version differences.
 - Graph rules require full-scope lint without ESLint result caching; keep snapshot invalidation tests under `project.cache: 'strict'`.
 - Project graphs are run-cached by default (`project.cache: 'run'`); do not add per-edge graph rebuilds.

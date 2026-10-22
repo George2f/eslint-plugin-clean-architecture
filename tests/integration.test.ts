@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Linter } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
 import plugin, { createConfig, createFrontendConfig, createLegacyFrontendConfig, defineArchitecture, rules } from '../src/index.js';
-import type { Architecture, Context } from '../src/types.js';
+import type { Architecture as ArchitectureShape, Context } from '../src/types.js';
 import { architecture, file, root } from './architecture.js';
 import { layerOf, matches, targetMatches } from '../src/utils/config.js';
 import { defaultArchitecture, frontendArchitecture } from '../src/utils/defaults.js';
@@ -14,7 +14,7 @@ import { project, lintProject } from './project-cases.js';
 import { projectGraph } from '../src/utils/project.js';
 import { createESLint, createLinter } from './eslint-compat.js';
 
-function verify(name: string, code: string, config: Architecture = architecture) {
+function verify(name: string, code: string, config: ArchitectureShape = architecture) {
   return createLinter({ cwd: config.root }).verify(code, [{
     files: ['**/*.ts'], languageOptions: { parser }, plugins: { 'clean-architecture': plugin },
     settings: { 'clean-architecture': config }, rules: { [`clean-architecture/${name}`]: 'error' },
@@ -186,7 +186,7 @@ describe('configuration failures', () => {
     const duplicate = { name: 'same', files: ['src/**'], public: [] };
     expect(() => defineArchitecture({ root, components: [duplicate, duplicate] })).toThrow('unique');
     expect(() => createConfig(architecture, { level: 'typo' as 'strict' })).toThrow('invalid createConfig');
-    expect(() => defineArchitecture({ root, roles: true as unknown as Architecture['roles'] })).toThrow('roles must be an object');
+    expect(() => defineArchitecture({ root, roles: true as unknown as ArchitectureShape['roles'] })).toThrow('roles must be an object');
     expect(() => verify('dependency-direction', '', { root })).toThrow('architecture.layers');
     expect(() => verify('no-concrete-method-override', 'export class Example {}')).toThrow('requires @typescript-eslint/parser');
   });

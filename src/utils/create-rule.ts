@@ -1,6 +1,6 @@
 import type { Analysis, Context, Docs, Options, Reliability, Rule } from '../types.js';
 import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
-import { architecture, relative, matches, requireScope } from './config.js';
+import { architectureOf, relative, matches, requireScope } from './config.js';
 
 interface Definition {
   name: string;
@@ -40,10 +40,10 @@ export function createRule(definition: Definition): Rule {
     },
     defaultOptions: [] as Options,
     create(context) {
-      const config = architecture(context);
+      const config = architectureOf(context);
       const filename = context.physicalFilename;
       if (matches(relative(config, filename), config.ignore)) return {};
-      for (const key of definition.scopes ?? []) requireScope(config, key, definition.name);
+      for (const key of definition.scopes ?? []) requireScope(config[key], key, definition.name);
       return definition.create(context);
     },
   };

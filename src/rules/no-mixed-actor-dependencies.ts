@@ -1,5 +1,5 @@
 import { createRule, report } from '../utils/create-rule.js';
-import { architecture, componentOf } from '../utils/config.js';
+import { architectureOf, componentOf } from '../utils/config.js';
 import { dependencyVisitors } from '../utils/dependencies.js';
 
 export default createRule({
@@ -7,7 +7,7 @@ export default createRule({
   chapters: [7, 13], principle: 'Single Responsibility and Common Closure', reliability: 'heuristic', scopes: ['components'],
   limitations: 'Actors must be explicitly assigned to components. Multiple actor dependencies are a review signal, not proof of multiple reasons to change. Orchestration may legitimately combine actors.',
   create(context) {
-    const config = architecture(context), actors = new Set<string>();
+    const config = architectureOf(context), actors = new Set<string>();
     return dependencyVisitors(context, dependency => {
       const actor = dependency.target ? componentOf(config, dependency.target)?.actor : undefined;
       if (!actor || actors.has(actor)) return;
