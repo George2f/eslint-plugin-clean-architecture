@@ -15,9 +15,40 @@ export interface Graph {
   metrics: Map<string, Metric>;
 }
 
-interface Cached { key: string; digest: string; graph: Graph; reads: Map<string, string | undefined>; exists: Map<string, boolean>; directories: Map<string, boolean> }
-const cache: Cached[] = [];
+interface Cached {
+  graph: Graph;
+  roots: string[];
+  digest: string;
+  reads: Map<string, string | undefined>;
+  exists: Map<string, boolean>;
+  directories: Map<string, boolean>;
+}
+const caches = new WeakMap<Architecture, Map<string, Cached>>();
+const settingsIds = new WeakMap<object, number>();
+let nextSettingsId = 0;
 const read = (file: string): string | undefined => { try { return fs.readFileSync(file, 'utf8'); } catch { return undefined; } };
+
+function digestOf(contents: Map<string, string>): string {
+  const hash = createHash('sha256');
+  for (const [file, text] of [...contents].sort(([a], [b]) => a.localeCompare(b))) hash.update(JSON.stringify([file, text]));
+  return hash.digest('hex');
+}
+
+function rootsFor(config: Architecture, settings: { files?: string[] }, project: NonNullable<Architecture['project']>, excludes: string[]): string[] {
+  const roots = project.files
+    ? ts.sys.readDirectory(config.root, ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'], excludes, project.files)
+    : settings.files ?? [];
+  return roots.map(file => path.resolve(file)).filter(file => !matches(relative(config, file), excludes)).sort();
+}
+
+function settingsId(settings: object): number {
+  let id = settingsIds.get(settings);
+  if (id === undefined) {
+    id = nextSettingsId++;
+    settingsIds.set(settings, id);
+  }
+  return id;
+}
 
 function bindingContains(name: ts.BindingName, expected: string): boolean {
   if (ts.isIdentifier(name)) return name.text === expected;
@@ -153,28 +184,50 @@ export function projectGraph(context: Context): Graph {
   const project = config.project;
   if (!project) throw new Error('clean-architecture: project analysis requires architecture.project');
   const settings = compilerSettings(config);
+  const includeTypeOnly = context.options[0]?.includeTypeOnly !== false;
+  const mode = project.cache ?? 'run';
   const excludes = ['**/node_modules/**', '**/dist/**', '**/coverage/**', '**/.git/**', ...(config.ignore ?? [])];
-  let roots = project.files
-    ? ts.sys.readDirectory(config.root, ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'], excludes, project.files)
-    : settings.files ?? [];
-  roots = roots.map(file => path.resolve(file)).filter(file => !matches(relative(config, file), excludes)).sort();
-  if (!roots.length) throw new Error('clean-architecture: project scope contains no source files');
-  const key = JSON.stringify([config, settings.options, roots, context.options[0]?.includeTypeOnly !== false]);
-  const previous = cache.find(entry => entry.key === key);
-  const contents = new Map<string, string>();
+  const key = `${settingsId(settings)}|${project.files?.join('|') ?? ''}|${includeTypeOnly}|${mode}|${excludes.join('|')}`;
+  let byKey = caches.get(config);
+  if (!byKey) {
+    byKey = new Map();
+    caches.set(config, byKey);
+  }
+  const previous = byKey.get(key);
   const current = path.resolve(context.physicalFilename);
-  for (const file of new Set([...roots, ...(previous?.graph.files.keys() ?? [])])) {
+
+  if (previous && mode === 'run') {
+    const known = previous.graph.files.get(current);
+    if (!known || known.text === context.sourceCode.text) return previous.graph;
+  }
+
+  const roots = rootsFor(config, settings, project, excludes);
+  if (!roots.length) throw new Error('clean-architecture: project scope contains no source files');
+
+  if (previous && mode === 'strict') {
+    const unchangedRoots = previous.roots.length === roots.length && previous.roots.every((file, index) => file === roots[index]);
+    if (unchangedRoots) {
+      const contents = new Map<string, string>();
+      let readable = true;
+      for (const file of previous.graph.files.keys()) {
+        const text = file === current ? context.sourceCode.text : read(file);
+        if (text === undefined) { readable = false; break; }
+        contents.set(file, text);
+      }
+      if (readable && digestOf(contents) === previous.digest &&
+        [...previous.reads].every(([file, text]) => read(file) === text) &&
+        [...previous.exists].every(([file, exists]) => ts.sys.fileExists(file) === exists) &&
+        [...previous.directories].every(([directory, exists]) => ts.sys.directoryExists(directory) === exists)) {
+        return previous.graph;
+      }
+    }
+  }
+
+  const contents = new Map<string, string>();
+  for (const file of roots) {
     const text = file === current ? context.sourceCode.text : read(file);
     if (text !== undefined) contents.set(file, text);
   }
-  const hash = createHash('sha256');
-  for (const [file, text] of [...contents].sort(([a], [b]) => a.localeCompare(b))) hash.update(JSON.stringify([file, text]));
-  const digest = hash.digest('hex');
-  if (previous?.digest === digest &&
-    [...previous.reads].every(([file, text]) => read(file) === text) &&
-    [...previous.exists].every(([file, exists]) => ts.sys.fileExists(file) === exists) &&
-    [...previous.directories].every(([directory, exists]) => ts.sys.directoryExists(directory) === exists)) return previous.graph;
-
   const reads = new Map<string, string | undefined>(), exists = new Map<string, boolean>(), directories = new Map<string, boolean>();
   const host: ts.ModuleResolutionHost = {
     readFile(file) { const text = ts.sys.readFile(file); reads.set(file, text); return text; },
@@ -194,7 +247,7 @@ export function projectGraph(context: Context): Graph {
     const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true);
     files.set(name, source);
     for (const item of sourceSpecifiers(source)) {
-      if (item.typeOnly && context.options[0]?.includeTypeOnly === false) continue;
+      if (item.typeOnly && !includeTypeOnly) continue;
       const target = ts.resolveModuleName(item.specifier, name, settings.options, host, resolutionCache, undefined,
         moduleMode(name, settings.options, host, item.kind)).resolvedModule?.resolvedFileName;
       if (!target) continue;
@@ -205,26 +258,31 @@ export function projectGraph(context: Context): Graph {
     }
   }
   const graph = { files, edges, ...summarize(config, files, edges) };
-  const finalHash = createHash('sha256');
-  for (const [file, text] of [...contents].sort(([a], [b]) => a.localeCompare(b))) finalHash.update(JSON.stringify([file, text]));
-  const entry = { key, digest: finalHash.digest('hex'), graph, reads, exists, directories };
-  const existing = cache.findIndex(item => item.key === key);
-  if (existing >= 0) cache.splice(existing, 1);
-  cache.unshift(entry);
-  cache.splice(4);
+  byKey.set(key, { graph, roots, digest: digestOf(contents), reads, exists, directories });
   return graph;
 }
 
+const cycleCaches = new WeakMap<Graph, Map<string, string[] | undefined>>();
+
 export function cyclePath(graph: Graph, from: string, to: string): string[] | undefined {
+  let cache = cycleCaches.get(graph);
+  if (!cache) {
+    cache = new Map();
+    cycleCaches.set(graph, cache);
+  }
+  const key = `${from}\0${to}`;
+  if (cache.has(key)) return cache.get(key);
   const queue: string[][] = [[to]];
   const visited = new Set<string>();
+  let result: string[] | undefined;
   for (const route of queue) {
     const last = route.at(-1);
     if (!last) continue;
-    if (last === from) return [from, ...route];
+    if (last === from) { result = [from, ...route]; break; }
     if (visited.has(last)) continue;
     visited.add(last);
     for (const next of [...(graph.adjacency.get(last) ?? [])].sort()) queue.push([...route, next]);
   }
-  return undefined;
+  cache.set(key, result);
+  return result;
 }

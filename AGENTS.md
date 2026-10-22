@@ -11,7 +11,8 @@
 - No architectural autofixes. Do not include ebook text or local ebook paths in artifacts.
 - `npm test`, `npm run lint`, `npm run verify:dist`, `npm run example`, `npm pack --dry-run`, and `npx publint` are completion checks.
 - Tests must stay compatible with ESLint 8.57, 9, and 10; use `tests/eslint-compat.ts` for version differences.
-- Graph rules require full-scope lint without ESLint result caching; keep snapshot invalidation tests.
+- Graph rules require full-scope lint without ESLint result caching; keep snapshot invalidation tests under `project.cache: 'strict'`.
+- Project graphs are run-cached by default (`project.cache: 'run'`); do not add per-edge graph rebuilds.
 - Metrics are documented source-module adaptations, not the book's exact class metrics.
 - Releases are tag-triggered through `.github/workflows/release.yml` and npm trusted publishing; changelog notes come from `scripts/changelog-notes.mjs`.
 - Do not publish, commit, or tag unless explicitly requested.

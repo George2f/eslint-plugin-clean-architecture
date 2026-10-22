@@ -192,6 +192,7 @@ describe('resolution and dependency forms', () => {
       { name: 'b', files: ['b/index.ts'], public: ['b/index.ts'] },
       { name: 'c', files: ['b/safe.ts'], public: ['b/safe.ts'] },
     ];
+    config.project = { files: ['**/*.ts'], cache: 'strict' };
     fs.mkdirSync(`${config.root}/node_modules`);
     fs.symlinkSync(`${config.root}/b`, `${config.root}/node_modules/workspace-b`, 'junction');
     const manifest = `${config.root}/b/package.json`;

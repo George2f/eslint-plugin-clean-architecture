@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { minimatch } from 'minimatch';
+import { Minimatch } from 'minimatch';
 import type { Architecture, Component, Context, Layer, Role } from '../types.js';
 import { defaultArchitecture } from './defaults.js';
 
@@ -10,8 +10,18 @@ export const slash = (value: string): string => value.replaceAll('\\', '/');
 export const relative = (config: Architecture, file: string): string =>
   slash(path.relative(config.root, file));
 
+const matchers = new Map<string, Minimatch>();
+
 export function matches(file: string, patterns: readonly string[] = []): boolean {
-  return patterns.some(pattern => minimatch(slash(file), pattern, { dot: true, nonegate: true }));
+  const value = slash(file);
+  return patterns.some(pattern => {
+    let matcher = matchers.get(pattern);
+    if (!matcher) {
+      matcher = new Minimatch(pattern, { dot: true, nonegate: true });
+      matchers.set(pattern, matcher);
+    }
+    return matcher.match(value);
+  });
 }
 
 function strings(value: unknown, name: string): asserts value is string[] {
@@ -91,8 +101,11 @@ export function defineArchitecture(config: Architecture): Architecture {
     throw new Error('clean-architecture: unresolved must be ignore or report');
   }
   if (config.project) {
-    if (Object.keys(config.project).some(key => key !== 'tsconfig' && key !== 'files')) {
-      throw new Error('clean-architecture: project accepts only tsconfig and files');
+    if (Object.keys(config.project).some(key => key !== 'tsconfig' && key !== 'files' && key !== 'cache')) {
+      throw new Error('clean-architecture: project accepts only tsconfig, files, and cache');
+    }
+    if (config.project.cache !== undefined && !['run', 'strict'].includes(config.project.cache)) {
+      throw new Error('clean-architecture: project.cache must be run or strict');
     }
     if (config.project.tsconfig !== undefined && typeof config.project.tsconfig !== 'string') {
       throw new Error('clean-architecture: project.tsconfig must be a path');
@@ -105,9 +118,26 @@ export function defineArchitecture(config: Architecture): Architecture {
   return config;
 }
 
+const settingsCache = new WeakMap<object, Architecture>();
+const defaultCache = new Map<string, Architecture>();
+
 export function architecture(context: Context): Architecture {
   const settings = context.settings['clean-architecture'];
-  return defineArchitecture(settings === undefined ? defaultArchitecture(context.cwd) : settings as Architecture);
+  if (settings === undefined) {
+    let value = defaultCache.get(context.cwd);
+    if (!value) {
+      value = defineArchitecture(defaultArchitecture(context.cwd));
+      defaultCache.set(context.cwd, value);
+    }
+    return value;
+  }
+  const key = settings as object;
+  let value = settingsCache.get(key);
+  if (!value) {
+    value = defineArchitecture(settings as Architecture);
+    settingsCache.set(key, value);
+  }
+  return value;
 }
 
 export function requireScope(config: Architecture, key: keyof Architecture, rule: string): void {

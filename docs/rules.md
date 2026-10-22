@@ -147,11 +147,11 @@ Framework hooks and intentional template methods are legitimate exceptions.
 
 ## port-ownership
 
-Ch. 11/22; configured, AST with optional types. Requires `core`, `roles`.
+Ch. 11/22; configured, AST. Requires `core`, `roles`.
 Valid: policy uses port owned by its own or permitted inner layer. Invalid:
-policy imports a designated port owned by a forbidden outer layer. JavaScript
-checks literal imports; TypeScript also follows aliases and type declarations.
-Without layer classification, the port must be in core. No names-based guessing.
+policy imports a designated port owned by a forbidden outer layer. Only literal
+imports are resolved; aliases behind re-exports are not followed. Without layer
+classification, the port must be in core. No names-based guessing.
 
 ## no-outer-types-in-contracts
 
