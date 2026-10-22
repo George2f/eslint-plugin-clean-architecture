@@ -208,7 +208,7 @@ and [chapter-by-chapter coverage/research decisions](docs/coverage.md).
 | [`no-component-cycles`](docs/rules.md#no-component-cycles) | 14 | Policy | Project |
 | [`no-volatile-construction`](docs/rules.md#no-volatile-construction) | 11, 26 | Policy | AST + types |
 | [`no-volatile-inheritance`](docs/rules.md#no-volatile-inheritance) | 11, 32 | Policy | AST + types |
-| [`port-ownership`](docs/rules.md#port-ownership) | 11, 22 | Policy | AST + types |
+| [`port-ownership`](docs/rules.md#port-ownership) | 11, 22 | Policy | AST |
 | [`no-outer-types-in-contracts`](docs/rules.md#no-outer-types-in-contracts) | 20, 22 | Policy | Types |
 | [`no-entity-boundary-data`](docs/rules.md#no-entity-boundary-data) | 20, 22 | Policy | Types |
 | [`boundary-model-dependencies`](docs/rules.md#boundary-model-dependencies) | 20, 22, 30, 31 | Policy | Types |
@@ -255,7 +255,8 @@ can change runtime behavior; diagnostics explain the violated boundary instead.
 - Preset strictness controls severity, not coverage. Rules without matching
   scopes/files remain dormant. Use frontend profiles or explicit mappings.
 - Project graph rules require full-scope lint with **ESLint result cache disabled**.
-  An unchanged importer can acquire a violation when a dependency changes.
+  They use a run-scoped graph cache by default; use `project.cache: 'strict'` for
+  editor/watch workflows that must see external files change mid-process.
 - Graph snapshots include source contents, resolution metadata, current unsaved
   source, and file/directory existence checks. Only literal dependencies are known.
 - Types erased to `any`/`unknown` cannot reveal runtime implementations.

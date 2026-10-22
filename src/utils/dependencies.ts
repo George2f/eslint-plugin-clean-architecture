@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { isBuiltin } from 'node:module';
 import ts from 'typescript';
@@ -6,19 +7,28 @@ import type { Architecture, Context, Dependency, Rule } from '../types.js';
 import { architecture } from './config.js';
 import { createRule, report } from './create-rule.js';
 
-export function compilerSettings(config: Architecture): { files?: string[]; options: ts.CompilerOptions } {
-  const defaults: ts.CompilerOptions = {
+const defaultSettings: { options: ts.CompilerOptions } = {
+  options: {
     module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
     target: ts.ScriptTarget.ESNext, allowJs: true, resolveJsonModule: true,
-  };
-  if (!config.project?.tsconfig) return { options: defaults };
+  },
+};
+const compilerCache = new Map<string, { mtimeMs: number; size: number; value: { files?: string[]; options: ts.CompilerOptions } }>();
+
+export function compilerSettings(config: Architecture): { files?: string[]; options: ts.CompilerOptions } {
+  if (!config.project?.tsconfig) return defaultSettings;
   const file = path.resolve(config.root, config.project.tsconfig);
+  const stat = fs.statSync(file);
+  const previous = compilerCache.get(file);
+  if (previous?.mtimeMs === stat.mtimeMs && previous.size === stat.size) return previous.value;
   const loaded = ts.readConfigFile(file, ts.sys.readFile);
   if (loaded.error) throw new Error(ts.flattenDiagnosticMessageText(loaded.error.messageText, '\n'));
   const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, path.dirname(file), undefined, file);
   const errors = parsed.errors.filter(error => error.code !== 18003);
   if (errors.length) throw new Error(errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n')).join('\n'));
-  return { files: parsed.fileNames, options: parsed.options };
+  const value = { files: parsed.fileNames, options: parsed.options };
+  compilerCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value });
+  return value;
 }
 
 export type LoadKind = 'static' | 'import' | 'require';
@@ -32,11 +42,28 @@ export function moduleMode(source: string, options: ts.CompilerOptions, host: ts
   return ts.ModuleKind.ESNext;
 }
 
+const resolutionCaches = new WeakMap<ts.CompilerOptions, Map<string, ts.ModuleResolutionCache>>();
+
+function resolutionCache(root: string, options: ts.CompilerOptions): ts.ModuleResolutionCache {
+  let byRoot = resolutionCaches.get(options);
+  if (!byRoot) {
+    byRoot = new Map();
+    resolutionCaches.set(options, byRoot);
+  }
+  let cache = byRoot.get(root);
+  if (!cache) {
+    cache = ts.createModuleResolutionCache(root, value => value, options);
+    byRoot.set(root, cache);
+  }
+  return cache;
+}
+
 export function resolveDependency(config: Architecture, source: string, specifier: string, options?: ts.CompilerOptions, kind: LoadKind = 'static'): string | undefined {
   if (isBuiltin(specifier)) return undefined;
   const settings = options ?? compilerSettings(config).options;
-  return ts.resolveModuleName(specifier, source, settings, ts.sys, undefined, undefined, moduleMode(source, settings, ts.sys, kind))
-    .resolvedModule?.resolvedFileName;
+  const cache = config.project?.cache === 'strict' ? undefined : resolutionCache(config.root, settings);
+  return ts.resolveModuleName(specifier, source, settings, ts.sys, cache, undefined,
+    moduleMode(source, settings, ts.sys, kind)).resolvedModule?.resolvedFileName;
 }
 
 export function literal(node: TSESTree.Node | null | undefined): string | undefined {

@@ -33,7 +33,7 @@ export interface Architecture {
   testingApi?: string[];
   businessTests?: string[];
   ignore?: string[];
-  project?: { tsconfig?: string; files?: string[] };
+  project?: { tsconfig?: string; files?: string[]; cache?: 'run' | 'strict' };
   unresolved?: 'ignore' | 'report';
 }
 

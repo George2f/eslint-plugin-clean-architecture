@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-22
+
+### Changed
+
+- Added shared caches for tsconfig parsing, architecture validation, minimatch
+  compilation, and module resolution.
+- Project graphs are now cached per lint run instead of re-reading and hashing
+  every project file on each rule/import; `project.cache: 'strict'` remains
+  available for editor/watch invalidation.
+- Project graph consumers fetch the graph once per file; cycle paths are cached.
+- `port-ownership` now checks literal imports instead of every identifier/type
+  symbol, reducing TypeScript checker overhead.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added

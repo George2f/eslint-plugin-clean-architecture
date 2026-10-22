@@ -116,7 +116,7 @@ External-package declaration paths are recognized under `node_modules`.
 | `businessTests` | Business-rule test globs governed by testing API; do not include GUI/end-to-end tests indiscriminately |
 | `testingApi` | Permitted testing API files |
 | `ignore` | File globs excluded from rule evaluation and project graph |
-| `project` | `{ tsconfig?: string, files?: string[] }`; at least one required; `files` overrides tsconfig roots while retaining compiler resolution options |
+| `project` | `{ tsconfig?: string, files?: string[], cache?: 'run' \| 'strict' }`; at least one root source required; `files` overrides tsconfig roots while retaining resolver options. `run` caches one graph per config/run; `strict` revalidates external file/package changes |
 | `unresolved` | `ignore` (default) or `report`; latter selects completeness check in helper |
 
 Ambiguous layer/component membership throws; ordering is not an escape hatch.
@@ -184,6 +184,12 @@ resolved local imports transitively within root, excluding `node_modules`, `dist
 `coverage`, `.git`, and `ignore`. Workspace symlinks resolved to local source can
 participate. Dependencies outside declared components are not assigned artificial
 stability or component membership. Runtime network relationships are not inferred.
+
+`project.cache` defaults to `run`: the first graph is reused for the rest of the
+ESLint process, while current-file edits are still detected. External files or
+package manifests changed during one long-running process require
+`project.cache: 'strict'`, which revalidates contents and resolution metadata on
+every graph request at extra cost. Use `strict` for editor/watch workflows.
 
 Default resolution uses TypeScript Bundler/ESNext semantics. With tsconfig,
 compiler settings determine aliases, extension substitution, and export handling.

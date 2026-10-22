@@ -9,11 +9,13 @@ export default createRule({
   limitations: 'Requires full-scope lint without ESLint result caching. Runtime-computed dependencies cannot be included. Intra-component file cycles are not component cycles.',
   create(context) {
     const config = architecture(context);
+    let graph: ReturnType<typeof projectGraph> | undefined;
+    const getGraph = (): ReturnType<typeof projectGraph> => graph ??= projectGraph(context);
     return dependencyVisitors(context, dependency => {
       if (!dependency.target) return;
       const from = componentOf(config, context.physicalFilename), to = componentOf(config, dependency.target);
       if (!from || !to || from.name === to.name) return;
-      const route = cyclePath(projectGraph(context), from.name, to.name);
+      const route = cyclePath(getGraph(), from.name, to.name);
       if (route) report(context, dependency.node, `Component cycle: ${route.join(' -> ')}`, [14]);
     });
   },

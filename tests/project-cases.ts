@@ -56,6 +56,7 @@ export function testProjectRule(name: string): void {
       });
       it('invalidates snapshots when another source changes even with identical timestamps', () => {
         const config = project({ 'a/index.ts': 'import "../b/index.js";', 'b/index.ts': 'import "../a/index.js";' });
+        config.project = { files: ['**/*.ts'], cache: 'strict' };
         const target = path.join(config.root, 'b/index.ts'), stat = fs.statSync(target);
         expect(lintProject(config, 'a/index.ts', name)).toHaveLength(1);
         fs.writeFileSync(target, 'export const b = 1;');
