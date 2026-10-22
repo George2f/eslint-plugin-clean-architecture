@@ -2,6 +2,7 @@ import type { ESLint, Linter, Rule as ESLintRule } from 'eslint';
 import packageJson from '../package.json';
 import type { Architecture, Docs, Rule } from './types.js';
 import { defineArchitecture } from './utils/config.js';
+import { defaultArchitecture } from './utils/defaults.js';
 import dependencyDirection from './rules/dependency-direction.js';
 import componentPublicApi from './rules/component-public-api.js';
 import noCoreInfrastructure from './rules/no-core-infrastructure.js';
@@ -120,15 +121,16 @@ export function createConfig(architecture: Architecture, options: ConfigOptions 
 }
 
 for (const level of ['recommended', 'strict', 'strictest'] as const) {
-  plugin.configs[level] = {
-    name: `clean-architecture/${level}`,
-    plugins: { 'clean-architecture': plugin },
-    rules: {
-      'clean-architecture/dependency-direction': 'error',
-      'clean-architecture/component-public-api': 'error',
-      ...(level !== 'recommended' ? { 'clean-architecture/no-mixed-actor-dependencies': level === 'strictest' ? 'error' : 'warn' } : {}),
-    },
-  };
+  for (const typed of [false, true]) {
+    const name = `${level}${typed ? '-type-checked' : ''}`;
+    const config = createConfig(defaultArchitecture(process.cwd()), {
+      level, types: typed, project: typed, completeness: typed,
+    });
+    config.name = `clean-architecture/${name}`;
+    // Resolve conventions against ESLint's cwd, not where this module was imported.
+    delete config.settings;
+    plugin.configs[name] = config;
+  }
 }
 
 export { defineArchitecture };

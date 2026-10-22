@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { minimatch } from 'minimatch';
 import type { Architecture, Component, Context, Layer, Role } from '../types.js';
+import { defaultArchitecture } from './defaults.js';
 
 export const roles: Role[] = ['entity', 'use-case', 'port', 'adapter', 'controller',
   'repository', 'view', 'presenter', 'composition', 'test'];
@@ -105,7 +106,8 @@ export function defineArchitecture(config: Architecture): Architecture {
 }
 
 export function architecture(context: Context): Architecture {
-  return defineArchitecture(context.settings['clean-architecture'] as Architecture);
+  const settings = context.settings['clean-architecture'];
+  return defineArchitecture(settings === undefined ? defaultArchitecture(context.cwd) : settings as Architecture);
 }
 
 export function requireScope(config: Architecture, key: keyof Architecture, rule: string): void {

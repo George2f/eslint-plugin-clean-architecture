@@ -1,77 +1,108 @@
 # eslint-plugin-clean-architecture
 
-31 configurable ESLint checks derived from Robert C. Martin's *Clean Architecture*:
-dependency direction, component boundaries, typed contracts, dependency inversion,
-immutability, coupling metrics, and clearly labeled design heuristics.
+[![CI](https://github.com/George2f/eslint-plugin-clean-architecture/actions/workflows/ci.yml/badge.svg)](https://github.com/George2f/eslint-plugin-clean-architecture/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Explicit architecture, not guessed architecture.** You declare layers,
-components, roles, and infrastructure. Rules enforce that declaration. They do
-not prove that your business design is correct or prescribe four folders.
+ESLint rules derived from [Clean Architecture](https://www.informit.com/store/clean-architecture-a-craftsmans-guide-to-software-structure-9780134494166) by Robert C. Martin.
+
+Every rule maps to book chapters and principles in its metadata, so a lint report
+points back to the architectural idea it checks.
+
+- 31 rules: dependency boundaries, components, SOLID signals, contracts, and immutability.
+- All 34 chapters mapped, including documented limits and non-detectable guidance.
+- ESLint 9 flat config, JavaScript and TypeScript, dual ESM/CJS build.
+
+## Why this exists
+
+Architectural boundaries are easy to agree on and easy to break with one import.
+This plugin turns the checkable parts of Clean Architecture into build-time
+feedback. Start with a preset; customize the boundaries when your layout differs.
 
 ## Install
 
 ```sh
-npm install --save-dev @george2f/eslint-plugin-clean-architecture eslint
-# For TypeScript-aware checks:
-npm install --save-dev @typescript-eslint/parser
+npm install --save-dev eslint @george2f/eslint-plugin-clean-architecture
 ```
 
-Node >=20.19 and ESLint 9. TypeScript and minimatch are runtime dependencies.
-Both ESM and CommonJS exports are provided; CommonJS uses `.default` for the
-plugin and named exports for helpers.
+Requires Node >=20.19 and ESLint 9. TypeScript and minimatch are runtime dependencies.
 
 ## Usage
 
 ```js
 // eslint.config.mjs
-import { createConfig } from '@george2f/eslint-plugin-clean-architecture';
+import cleanArchitecture from '@george2f/eslint-plugin-clean-architecture';
+
+export default [
+  cleanArchitecture.configs.recommended,
+  // cleanArchitecture.configs.strict,     // adds heuristic warnings
+  // cleanArchitecture.configs.strictest,  // same checks, all errors
+];
+```
+
+No architecture settings required for the presets. They use documented conventions
+under `src/`: `domain`/`entities`, `application`/`use-cases`/`usecases`,
+`adapters`/`infrastructure`, and `presentation`/`ui`. Public component entry points
+are `index.*` or `public.*`. Other layouts need [custom mappings](docs/configuration.md#custom-architecture).
+
+Or pick rules individually:
+
+```js
+import cleanArchitecture from '@george2f/eslint-plugin-clean-architecture';
 
 export default [{
-  files: ['src/**/*.{js,ts}'],
-  ...createConfig({
-    root: import.meta.dirname,
-    layers: [
-      { name: 'domain', files: ['src/domain/**'], allow: [] },
-      { name: 'application', files: ['src/application/**'], allow: ['domain'] },
-      { name: 'adapters', files: ['src/adapters/**'], allow: ['domain', 'application'] },
-    ],
-    components: [
-      { name: 'domain', files: ['src/domain/**'], public: ['src/domain/index.ts'] },
-      { name: 'application', files: ['src/application/**'], public: ['src/application/index.ts'] },
-    ],
-    core: ['src/domain/**', 'src/application/**'],
-    infrastructure: { persistence: ['pg', 'prisma', 'src/adapters/database/**'] },
-  }),
+  plugins: { 'clean-architecture': cleanArchitecture },
+  rules: {
+    'clean-architecture/dependency-direction': 'error',
+    'clean-architecture/no-core-infrastructure': 'error',
+  },
 }];
 ```
 
-For `.ts` syntax configure a TypeScript parser even when rules do not need types.
-See [typed/project setup](docs/configuration.md) and the executable
-[example](examples/basic/eslint.config.mjs).
+### TypeScript
+
+For TypeScript syntax, add your usual TypeScript parser configuration to the base
+preset. For type-aware contract/DIP checks and project graphs, use a `-type-checked`
+preset:
+
+```sh
+npm install --save-dev @typescript-eslint/parser
+```
+
+```js
+import parser from '@typescript-eslint/parser';
+import cleanArchitecture from '@george2f/eslint-plugin-clean-architecture';
+
+export default [{
+  ...cleanArchitecture.configs['strict-type-checked'],
+  files: ['src/**/*.ts'],
+  languageOptions: { parser, parserOptions: { projectService: true } },
+}];
+```
+
+Typed presets require a tsconfig covering the files and full-scope lint **without
+`--cache`**. They use the root tsconfig for resolution when present, otherwise
+discover source files under `src/`.
 
 ## Presets and applicability
 
-`createConfig(architecture, options)` is the recommended entry point. It selects
-only rules whose declared scopes you supplied. Inspect returned `rules` to see
-the exact enabled set. Unclassified files/roles are not magically protected.
+| Config | Enabled rules | Severity |
+| --- | --- | --- |
+| `recommended` | 11 AST policies | Errors |
+| `strict` | 13 AST checks | Policy errors, heuristic warnings |
+| `strictest` | 13 AST checks | All errors |
+| `recommended-type-checked` | 18 policies, including typed and project checks | Errors |
+| `strict-type-checked` | 28 checks, including heuristics and metrics | Policy errors, other warnings |
+| `strictest-type-checked` | 28 checks | All errors |
 
-| Option | Behavior |
-| --- | --- |
-| `level: 'recommended'` (default) | Configured policies as errors |
-| `level: 'strict'` | Adds applicable heuristics and metrics as warnings |
-| `level: 'strictest'` | Applicable checks all errors |
-| `types: true` | Adds applicable typed checks; requires parser type services |
-| `project: true` | Adds applicable graph checks; requires `architecture.project` |
-| `completeness: true` | Adds literal-target/resolution checks in declared core |
+The three volatility-specific rules require **explicit volatile targets** and are
+available through custom configuration. Actors and independent use-case labels
+are also explicit, never guessed. Immutable checks apply only to conventional
+`pure`/`immutable` files or directories; contract checks only to designated model
+paths. Unmatched paths are not silently treated as core.
 
-`architecture.unresolved: 'report'` also selects the unresolved-target check.
-`project: true` with `recommended` includes cycle checking but not advisory metrics.
-
-The raw `plugin.configs.recommended/strict/strictest` are minimal static presets:
-direction + public APIs, with actor heuristic in strict/strictest. They require
-`settings['clean-architecture']` containing layers and components. They do not
-claim to enable all 31 rules without your architecture. Enabling a rule manually
-without its required scopes or type services throws a clear configuration error.
+`createConfig(architecture, options)` remains available for custom layouts, actor
+labels, volatility, and selectively enabling all 31 rules. See
+[configuration](docs/configuration.md) and the [working example](examples/basic/eslint.config.mjs).
 
 ## Rules
 
@@ -83,7 +114,67 @@ without its required scopes or type services throws a clear configuration error.
 
 Full [rule specifications](docs/rules.md), [configuration](docs/configuration.md),
 and [chapter-by-chapter coverage/research decisions](docs/coverage.md).
-Machine-readable metadata available through package export `./rules.json`.
+
+### Book-derived rules
+
+| Rule | Chapters | Tier | Analysis |
+| --- | --- | --- | --- |
+| [`dependency-direction`](docs/rules.md#dependency-direction) | 18, 19, 22 | Policy | AST |
+| [`component-public-api`](docs/rules.md#component-public-api) | 12, 17, 34 | Policy | AST |
+| [`no-core-infrastructure`](docs/rules.md#no-core-infrastructure) | 20, 21, 29–32 | Policy | AST |
+| [`no-composition-root-dependency`](docs/rules.md#no-composition-root-dependency) | 26 | Policy | AST |
+| [`no-production-test-dependency`](docs/rules.md#no-production-test-dependency) | 28 | Policy | AST |
+| [`use-case-isolation`](docs/rules.md#use-case-isolation) | 16 | Policy | AST |
+| [`no-controller-repository-access`](docs/rules.md#no-controller-repository-access) | 34 | Policy | AST |
+| [`humble-view-dependencies`](docs/rules.md#humble-view-dependencies) | 23 | Policy | AST |
+| [`testing-api-boundaries`](docs/rules.md#testing-api-boundaries) | 28 | Policy | AST |
+| [`no-volatile-concrete-dependency`](docs/rules.md#no-volatile-concrete-dependency) | 11 | Policy | AST |
+| [`no-dynamic-boundary-dependencies`](docs/rules.md#no-dynamic-boundary-dependencies) | 18, 22 | Policy | AST |
+| [`no-unresolved-boundary-dependencies`](docs/rules.md#no-unresolved-boundary-dependencies) | 18, 22 | Policy | AST |
+| [`no-component-cycles`](docs/rules.md#no-component-cycles) | 14 | Policy | Project |
+| [`no-volatile-construction`](docs/rules.md#no-volatile-construction) | 11, 26 | Policy | Types |
+| [`no-volatile-inheritance`](docs/rules.md#no-volatile-inheritance) | 11, 32 | Policy | Types |
+| [`port-ownership`](docs/rules.md#port-ownership) | 11, 22 | Policy | Types |
+| [`no-outer-types-in-contracts`](docs/rules.md#no-outer-types-in-contracts) | 20, 22 | Policy | Types |
+| [`no-entity-boundary-data`](docs/rules.md#no-entity-boundary-data) | 20, 22 | Policy | Types |
+| [`boundary-model-dependencies`](docs/rules.md#boundary-model-dependencies) | 20, 22, 30, 31 | Policy | Types |
+| [`no-mutation-in-immutable-modules`](docs/rules.md#no-mutation-in-immutable-modules) | 6 | Policy | AST |
+| [`no-mutable-module-state`](docs/rules.md#no-mutable-module-state) | 6 | Policy | AST |
+| [`no-concrete-method-override`](docs/rules.md#no-concrete-method-override) | 11 | Heuristic | Types |
+| [`no-mixed-actor-dependencies`](docs/rules.md#no-mixed-actor-dependencies) | 7, 13 | Heuristic | AST |
+| [`no-view-data-formatting`](docs/rules.md#no-view-data-formatting) | 23 | Heuristic | AST |
+| [`prefer-segregated-interfaces`](docs/rules.md#prefer-segregated-interfaces) | 10, 13 | Heuristic | Types |
+| [`no-subtype-rejection`](docs/rules.md#no-subtype-rejection) | 9 | Heuristic | Types |
+| [`prefer-polymorphic-dispatch`](docs/rules.md#prefer-polymorphic-dispatch) | 5, 8, 9 | Heuristic | Types |
+| [`no-behavior-in-boundary-models`](docs/rules.md#no-behavior-in-boundary-models) | 20, 22 | Heuristic | Types |
+| [`stable-dependencies`](docs/rules.md#stable-dependencies) | 14 | Metric | Project |
+| [`stable-abstractions`](docs/rules.md#stable-abstractions) | 14 | Metric | Project |
+| [`main-sequence-distance`](docs/rules.md#main-sequence-distance) | 14 | Metric | Project |
+
+### Machine-readable rule catalog
+
+The package ships `rules.json`, importable as
+`@george2f/eslint-plugin-clean-architecture/rules.json`: book references, tiers,
+analysis prerequisites, preset membership, schemas, and limitations. Useful for
+tooling and coding agents.
+
+## Options
+
+Rule options use standard ESLint tuples. For example, in an appropriate preset:
+
+```js
+rules: {
+  'clean-architecture/dependency-direction': ['error', { includeTypeOnly: false }],
+  'clean-architecture/main-sequence-distance': ['warn', { threshold: 0.5 }],
+}
+```
+
+See [option definitions](docs/configuration.md#rule-options).
+
+## Autofix and suggestions
+
+No architectural autofixes. Moving imports, extracting ports, or changing ownership
+can change runtime behavior; diagnostics explain the violated boundary instead.
 
 ## Limits
 
@@ -114,4 +205,6 @@ rule, multi-file fixtures, actual ESLint integration, and graph invalidation.
 No ebook content is bundled. Rules and book references are independent
 interpretations, not an official or exhaustive mechanical certification.
 
-MIT license.
+## License
+
+[MIT](LICENSE).
